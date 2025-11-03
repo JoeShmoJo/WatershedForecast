@@ -1,0 +1,130 @@
+name: Build and publish plots
+
+on:
+  schedule:
+    # NBM blend cycles: 00Z, 06Z, 12Z, 18Z. Probe early (+~75m) and late (+~165m).
+    - cron: "15 1 * * *"   # 00Z early
+    - cron: "45 2 * * *"   # 00Z late
+    - cron: "15 7 * * *"   # 06Z early
+    - cron: "45 8 * * *"   # 06Z late
+    - cron: "15 13 * * *"  # 12Z early
+    - cron: "45 14 * * *"  # 12Z late
+    - cron: "15 19 * * *"  # 18Z early
+    - cron: "45 20 * * *"  # 18Z late
+  workflow_dispatch:
+
+# Prevent overlapping runs
+concurrency:
+  group: build-plots
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps for GeoPandas/Shapely/GDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin libgdal-dev libspatialindex-dev
+
+      - name: Install Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install geopandas shapely xarray matplotlib pandas requests netCDF4 rtree
+
+      # --- Probe NOMADS for the newest available NBM 1-hr blend OPeNDAP URL ---
+      # If it matches the last-run URL (stored in .github/last_forecast_url.txt),
+      # skip the build to avoid re-downloading/overwriting with old data.
+      - name: Probe latest forecast URL (skip if unchanged)
+        id: probe
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          import sys, os, requests
+          from datetime import datetime, timedelta, timezone
+
+          base = "https://nomads.ncep.noaa.gov/dods/blend"
+          cycles = ["18z","12z","06z","00z"]  # try newest cycles first each day
+          latest = None
+
+          for day_offset in range(0, 3):
+            date_str = (datetime.now(timezone.utc) - timedelta(days=day_offset)).strftime("%Y%m%d")
+            for cyc in cycles:
+              dds_url = f"{base}/blend{date_str}/blend_1hr_{cyc}.dds"
+              try:
+                r = requests.get(dds_url, timeout=6)
+                if r.status_code == 200 and "Dataset" in r.text[:200]:
+                  latest = f"{base}/blend{date_str}/blend_1hr_{cyc}"
+                  break
+              except requests.RequestException:
+                pass
+            if latest:
+              break
+
+          if not latest:
+            # No dataset found in the last 3 days — declare no change and exit successfully
+            print("latest_url=")
+            print("has_new=false")
+            sys.exit(0)
+
+          print(f"latest_url={latest}")
+          last_file = ".github/last_forecast_url.txt"
+          if os.path.exists(last_file):
+            with open(last_file, "r", encoding="utf-8") as f:
+              prev = f.read().strip()
+          else:
+            prev = ""
+
+          print(f"has_new={'true' if latest != prev else 'false'}")
+          PY | tee /tmp/probe.out
+
+          # Export step outputs
+          LATEST_URL=$(grep '^latest_url=' /tmp/probe.out | head -n1 | cut -d= -f2-)
+          HAS_NEW=$(grep '^has_new=' /tmp/probe.out | head -n1 | cut -d= -f2-)
+          echo "latest_url=$LATEST_URL" >> "$GITHUB_OUTPUT"
+          echo "has_new=$HAS_NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Show probe result
+        run: |
+          echo "Latest URL: ${{ steps.probe.outputs.latest_url }}"
+          echo "Has new:    ${{ steps.probe.outputs.has_new }}"
+
+      # Only build when a new forecast is detected (or if no marker file existed)
+      - name: Build plots (offline, using cached basin geojsons)
+        if: steps.probe.outputs.has_new == 'true'
+        run: |
+          python WatershedForecast.py --all --offline
+
+      # Update the last-seen URL marker when we actually built
+      - name: Update last_forecast_url marker
+        if: steps.probe.outputs.has_new == 'true'
+        run: |
+          echo "${{ steps.probe.outputs.latest_url }}" > .github/last_forecast_url.txt
+
+      # Commit changes only if there are any (new images or updated marker)
+      - name: Commit updated docs assets and marker
+        if: steps.probe.outputs.has_new == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/assets .github/last_forecast_url.txt || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto-update plots for ${{ steps.probe.outputs.latest_url }}"
+            git push
+          else
+            echo "No changes to commit."
+          fi
