@@ -1,0 +1,22 @@
+{
+  "Canyon_Creek_WA": {
+    "state": "WA",
+    "latitude": 45.9404,
+    "longitude": -122.3226
+  },
+  "Hagen_abv_WF_Shoug_WA": {
+    "state": "WA",
+    "latitude": 45.6842,
+    "longitude": -122.2433
+  },
+  "Little_White_Salmon_at_Hatchery_WA": {
+    "state": "WA",
+    "latitude": 45.7672,
+    "longitude": -121.6300
+  },
+  "White_Salmon_at_Husum_WA": {
+    "state": "WA",
+    "latitude": 45.7978,
+    "longitude": -121.4862
+  }
+}
