@@ -92,39 +92,4 @@ has_new = bool(latest and latest != prev)
 json.dump({"latest_url": latest or "", "has_new": has_new}, open("/tmp/probe.json", "w"))
 EOF
 
-          echo "Probe output:"
-          cat /tmp/probe.json
-
-          latest_url=$(jq -r '.latest_url' /tmp/probe.json)
-          has_new=$(jq -r '.has_new' /tmp/probe.json)
-          echo "latest_url=$latest_url" >> "$GITHUB_OUTPUT"
-          echo "has_new=$has_new" >> "$GITHUB_OUTPUT"
-          echo "Latest URL: $latest_url"
-          echo "Has new:    $has_new"
-
-      - name: Build plots (offline, using cached basin geojsons)
-        if: steps.probe.outputs.has_new == 'true'
-        run: |
-          python WatershedForecast.py --all --offline
-
-      - name: Update last_forecast_url marker
-        if: steps.probe.outputs.has_new == 'true'
-        run: |
-          echo "${{ steps.probe.outputs.latest_url }}" > .github/last_forecast_url.txt
-
-      - name: Commit updated docs assets and marker
-        if: steps.probe.outputs.has_new == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/assets .github/last_forecast_url.txt || true
-          if ! git diff --cached --quiet; then
-            git commit -m "Auto-update plots for ${{ steps.probe.outputs.latest_url }}"
-            git push
-          else
-            echo "No changes to commit."
-          fi
-
-      - name: No new forecast — skipping build
-        if: steps.probe.outputs.has_new != 'true'
-        run: echo "Latest forecast unchanged; skipping build and commit."
+          echo "Probe ou
