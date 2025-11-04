@@ -1,1 +1,1 @@
-https://nomads.ncep.noaa.gov/dods/blend/blend20251104/blend_1hr_00z
+https://nomads.ncep.noaa.gov/dods/blend/blend20251104/blend_1hr_06z
