@@ -141,7 +141,7 @@ def build_index_from_config(root: Path):
         if have_map:
             cards.append(pic_block(basin, "cumulative_map_latest", "Cumulative Map"))
         if have_ts:
-            cards.append(pic_block(basin, "hourly_series_latest", "Hourly &amp; Cumulative Series"))
+            cards.append(pic_block(basin, "hourly_series_latest", "Hourly and Cumulative Series"))
         if have_flow:
             cards.append(pic_block(basin, "usgs_flow_latest", "USGS Streamflow (last 24h)"))
 
@@ -175,7 +175,8 @@ def build_index_from_config(root: Path):
 </head>
 <body>
   <h1>Watershed Forecast Plots</h1>
-  <p style="text-align:center;">Automatically updated basin precipitation and streamflow summaries.</p>
+  <p style="text-align:center;">National Blend of Models basin precipitation forecast and USGS streamflow summaries.</p>
+  <p style="text-align:center;">Precipitation grids cut to basin. Forecasts updated every ~6 hours. https://vlab.noaa.gov/web/mdl/nbm </p>
 
   {''.join(sections)}
 
