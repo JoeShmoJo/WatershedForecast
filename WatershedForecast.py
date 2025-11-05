@@ -609,6 +609,11 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
         save_basepath=ts_base,
     )
 
+    shutil.copyfile(f"{map_base}.svg", out_dir / "cumulative_map_latest.svg")
+    shutil.copyfile(f"{map_base}.png", out_dir / "cumulative_map_latest.png")
+    shutil.copyfile(f"{ts_base}.svg",  out_dir / "hourly_series_latest.svg")
+    shutil.copyfile(f"{ts_base}.png",  out_dir / "hourly_series_latest.png")
+    
     # 8.5) USGS streamflow (optional per Config.json)
     # --- inside run_one(), replace your whole USGS block with this ---
     if cfg.USGS_id:
