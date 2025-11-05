@@ -51,16 +51,6 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install geopandas shapely xarray matplotlib pandas requests netCDF4 rtree
 
-      # Rebuild index.html every run so new basins appear immediately
-      - name: Rebuild index.html from Config.json (always)
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          from WatershedForecast import build_index_from_config
-          build_index_from_config(Path("."))
-          print("index.html rebuilt.")
-          PY
-
       # ---- Probe NOMADS for newest NBM 1-hr blend URL ----
       - name: Probe latest forecast URL (skip heavy build if unchanged)
         id: probe
