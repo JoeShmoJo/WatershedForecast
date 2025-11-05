@@ -23,7 +23,6 @@ import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-import html as html_escape 
 import argparse
 import json
 import logging
@@ -49,7 +48,6 @@ from urllib3.util.retry import Retry
 
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-
 
 
 # ----------------------------
@@ -84,6 +82,7 @@ def load_config_file(root: Path) -> Dict[str, Dict[str, float | str]]:
     with open(cfg_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 # ----------------------------
 # Multiprocessing helper
 # ----------------------------
@@ -97,7 +96,6 @@ def _run_one_from_dict(args):
     except Exception as e:
         # Return the error so parent can log it
         return (cfg.name, str(e))
-
 
 
 # ----------------------------
@@ -193,6 +191,15 @@ def find_latest_nbm_opendap_url() -> str:
     raise RuntimeError("No recent NBM 1-hr OPeNDAP dataset found on NOMADS (last 3 days).")
 
 
+def get_locked_nbm_url() -> str:
+    """Use NBM_URL env var if provided, otherwise find the latest."""
+    forced = os.environ.get("NBM_URL")
+    if forced:
+        logging.info("NBM_URL env provided; using locked dataset: %s", forced)
+        return forced
+    return find_latest_nbm_opendap_url()
+
+
 def open_nbm_subset(opendap_url: str, basin: Polygon, hours: int) -> Tuple[xr.DataArray, Tuple[float, float, float, float]]:
     ds = xr.open_dataset(opendap_url, engine="netcdf4", cache=False)
     minx, miny, maxx, maxy = basin.bounds
@@ -210,8 +217,7 @@ def get_usgs_flow(usgs_id: str, end_time: datetime) -> pd.Series:
     Fetch past 24h discharge (00060) for a site.
     Returns a Series indexed in America/Los_Angeles (tz-aware).
     """
-    # Ensure end_time is UTC-aware
-    # make end_time current time 
+    # Ensure end_time is UTC-aware; use "now" to avoid gaps if forecast is older
     end_time = datetime.now(timezone.utc)
     if end_time.tzinfo is None:
         end_time = end_time.replace(tzinfo=timezone.utc)
@@ -220,7 +226,6 @@ def get_usgs_flow(usgs_id: str, end_time: datetime) -> pd.Series:
 
     start_time = end_time - timedelta(hours=24)
 
-    # Use Z (UTC) to avoid ambiguity
     url = (
         "https://waterservices.usgs.gov/nwis/iv/?format=json"
         f"&sites={usgs_id}"
@@ -492,9 +497,9 @@ def plot_hourly_and_cumulative_local(hourly_in_utc: pd.Series, title: str, save_
 
     fig, ax1 = plt.subplots(figsize=(10, 5))
     ax1.bar(hourly_local.index, hourly_local.values, width=pd.Timedelta("45min"),
-            label="Hourly Precip (in)", color="tab:blue")
+            label="Hourly Precip (in)")
     ax1.plot(cumulative_local.index, cumulative_local.values, marker="o",
-             label="Cumulative Precip (in)", color="tab:orange")
+             label="Cumulative Precip (in)")
 
     style_inrange_day_majors_3h_minors(ax1, hourly_local.index, hour_step=3)
 
@@ -542,7 +547,7 @@ def plot_usgs_flow(flow_series: pd.Series | None,
         flow_series = flow_series.tz_convert("America/Los_Angeles")
 
         ax.plot(flow_series.index, flow_series.values,
-                marker="o", color="tab:green", label="Discharge (cfs)")
+                marker="o", label="Discharge (cfs)")
 
         style_inrange_day_majors_3h_minors(ax, flow_series.index, hour_step=hour_step)
         ax.set_xlim(flow_series.index.min(), flow_series.index.max())
@@ -560,7 +565,6 @@ def plot_usgs_flow(flow_series: pd.Series | None,
     plt.close(fig)
 
 
-
 # ----------------------------
 # Orchestration
 # ----------------------------
@@ -569,8 +573,8 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
     basin = get_watershed_basin(cfg, offline=offline, streamstats_timeout=streamstats_timeout, streamstats_retries=streamstats_retries)
     logging.info("Basin ready: %s", cfg.name)
 
-    # 2) Forecast
-    url = find_latest_nbm_opendap_url()
+    # 2) Forecast (respect locked URL if provided)
+    url = get_locked_nbm_url()
     logging.info("Using forecast: %s", url)
     qpf, bbox = open_nbm_subset(url, basin, cfg.hours)
 
@@ -609,13 +613,17 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
         save_basepath=ts_base,
     )
 
-    shutil.copyfile(f"{map_base}.svg", out_dir / "cumulative_map_latest.svg")
-    shutil.copyfile(f"{map_base}.png", out_dir / "cumulative_map_latest.png")
-    shutil.copyfile(f"{ts_base}.svg",  out_dir / "hourly_series_latest.svg")
-    shutil.copyfile(f"{ts_base}.png",  out_dir / "hourly_series_latest.png")
-    
+    # 8a) Update "latest" precip pointers with logging
+    for src, dst in [
+        (f"{map_base}.svg", out_dir / "cumulative_map_latest.svg"),
+        (f"{map_base}.png", out_dir / "cumulative_map_latest.png"),
+        (f"{ts_base}.svg",  out_dir / "hourly_series_latest.svg"),
+        (f"{ts_base}.png",  out_dir / "hourly_series_latest.png"),
+    ]:
+        shutil.copyfile(src, dst)
+        logging.info("Updated latest: %s -> %s", src, dst)
+
     # 8.5) USGS streamflow (optional per Config.json)
-    # --- inside run_one(), replace your whole USGS block with this ---
     if cfg.USGS_id:
         flow_base = str(out_dir / f"usgs_flow_{stamp}")
 
@@ -637,11 +645,12 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
 
         # ALWAYS produce a figure (real or placeholder) and publish "latest"
         plot_usgs_flow(flow_series, title=title, save_basepath=flow_base)
-        shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
-        shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
-        logging.info("Updated latest USGS flow symlikes in %s", out_dir)
-
-
+        for src, dst in [
+            (f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg"),
+            (f"{flow_base}.png", out_dir / "usgs_flow_latest.png"),
+        ]:
+            shutil.copyfile(src, dst)
+            logging.info("Updated latest: %s -> %s", src, dst)
     else:
         # No gage configured: publish a placeholder so the index always has something to show
         flow_base = str(out_dir / f"usgs_flow_{stamp}")
@@ -650,11 +659,12 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
             title=f"{cfg.name} USGS Streamflow — No Associated Gage",
             save_basepath=flow_base,
         )
-        shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
-        shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
-        logging.info("Created placeholder latest USGS flow plots in %s", out_dir)
-    
-        
+        for src, dst in [
+            (f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg"),
+            (f"{flow_base}.png", out_dir / "usgs_flow_latest.png"),
+        ]:
+            shutil.copyfile(src, dst)
+            logging.info("Updated latest (placeholder): %s -> %s", src, dst)
 
 
 def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool = True,
@@ -679,7 +689,7 @@ def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool 
             run_one(cfg, offline=offline, streamstats_timeout=streamstats_timeout, streamstats_retries=streamstats_retries)
         except Exception as e:
             logging.exception("Failed for %s: %s", name, e)
-    
+
 
 def run_all_parallel(root: Path,
                      hours: int = 24,
@@ -691,7 +701,7 @@ def run_all_parallel(root: Path,
                      streamstats_retries: int = 5,
                      workers: int | None = None):
     """
-    Run all basins in parallel processes, then rebuild index.html once.
+    Run all basins in parallel processes.
     """
     cfg_json = load_config_file(root)
 
@@ -723,7 +733,7 @@ def run_all_parallel(root: Path,
 
     # Decide worker count
     if workers is None or workers <= 0:
-        workers = max(1, (os.cpu_count() or 2) - 0)  # tweak if you want
+        workers = max(1, (os.cpu_count() or 2) - 0)
 
     # Submit tasks
     futs = []
@@ -749,11 +759,8 @@ def run_all_parallel(root: Path,
             else:
                 logging.info("Basin %s finished OK", name)
 
-
-
     if any_error:
         logging.warning("One or more basins failed. See logs above.")
-
 
 
 # ----------------------------

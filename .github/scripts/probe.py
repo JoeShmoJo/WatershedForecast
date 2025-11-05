@@ -1,6 +1,8 @@
 # .github/scripts/probe.py
-# Writes /tmp/probe.json with {"latest_url": "...", "has_new": true/false}
-import json, os, requests
+# Writes /tmp/probe.json with {"latest_url": "...", "last_modified": "...", "has_new": true/false}
+import json
+import os
+import requests
 from datetime import datetime, timedelta, timezone
 
 BASE = "https://nomads.ncep.noaa.gov/dods/blend"
@@ -21,12 +23,36 @@ for day_offset in range(0, 3):
     if latest:
         break
 
-last_file = ".github/last_forecast_url.txt"
-prev = ""
-if os.path.exists(last_file):
-    with open(last_file, "r", encoding="utf-8") as f:
-        prev = f.read().strip()
+# Lightweight freshness header for the dataset (same URL may update later)
+last_modified = ""
+if latest:
+    try:
+        head = requests.head(latest + ".das", timeout=6)
+        last_modified = head.headers.get("Last-Modified", "")
+    except requests.RequestException:
+        pass
 
-has_new = bool(latest and latest != prev)
+marker_path = ".github/last_forecast_marker.txt"
+prev_url, prev_lm = "", ""
+if os.path.exists(marker_path):
+    try:
+        with open(marker_path, "r", encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f.readlines()]
+            if lines:
+                prev_url = lines[0]
+            if len(lines) > 1:
+                prev_lm = lines[1]
+    except Exception:
+        pass
+
+has_new = bool(latest) and (latest != prev_url or last_modified != prev_lm)
+
 with open("/tmp/probe.json", "w") as f:
-    json.dump({"latest_url": latest or "", "has_new": has_new}, f)
+    json.dump(
+        {
+            "latest_url": latest or "",
+            "last_modified": last_modified,
+            "has_new": has_new,
+        },
+        f,
+    )

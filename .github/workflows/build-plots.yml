@@ -28,65 +28,72 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python (with pip cache)
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-*.txt
 
-      - name: Install system deps (GeoPandas/Shapely/GDAL + jq)
+      # Install jq here so we can safely parse JSON outputs from the probe
+      - name: Install system deps (Geo stack + jq)
         run: |
           sudo apt-get update
           sudo apt-get install -y gdal-bin libgdal-dev libspatialindex-dev jq
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', 'WatershedForecast.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install Python packages
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-          pip install geopandas shapely xarray matplotlib pandas requests netCDF4 rtree
-
-      # ---- Probe NOMADS for newest NBM 1-hr blend URL ----
+      # ---- Probe NOMADS for newest NBM 1-hr blend URL and freshness marker ----
       - name: Probe latest forecast URL (skip heavy build if unchanged)
         id: probe
-        shell: bash
         run: |
           set -euo pipefail
           python .github/scripts/probe.py
           echo "Probe output:"
           cat /tmp/probe.json
           latest_url=$(jq -r '.latest_url' /tmp/probe.json)
+          last_modified=$(jq -r '.last_modified' /tmp/probe.json)
           has_new=$(jq -r '.has_new' /tmp/probe.json)
-          echo "latest_url=$latest_url" >> "$GITHUB_OUTPUT"
-          echo "has_new=$has_new" >> "$GITHUB_OUTPUT"
-          echo "Latest URL: $latest_url"
-          echo "Has new:    $has_new"
+          echo "latest_url=${latest_url}" >> "$GITHUB_OUTPUT"
+          echo "last_modified=${last_modified}" >> "$GITHUB_OUTPUT"
+          echo "has_new=${has_new}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Python packages
+        if: steps.probe.outputs.has_new == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install geopandas shapely xarray matplotlib pandas requests netCDF4 rtree
+          fi
 
       - name: Build plots (offline, using cached basin geojsons)
         if: steps.probe.outputs.has_new == 'true'
+        env:
+          # Lock the dataset URL for the whole run so all basins use the same cycle
+          NBM_URL: ${{ steps.probe.outputs.latest_url }}
         run: |
           python WatershedForecast.py --all --offline
 
-      - name: Update last_forecast_url marker
+      - name: Update last_forecast marker
         if: steps.probe.outputs.has_new == 'true'
         run: |
-          echo "${{ steps.probe.outputs.latest_url }}" > .github/last_forecast_url.txt
+          printf "%s\n%s\n" "${{ steps.probe.outputs.latest_url }}" "${{ steps.probe.outputs.last_modified }}" > .github/last_forecast_marker.txt
 
-      - name: Commit updated docs assets, index.html, and marker
+      - name: Commit updated docs assets and marker (not index.html)
         if: steps.probe.outputs.has_new == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/assets docs/index.html .github/last_forecast_url.txt || true
+          git add docs/assets .github/last_forecast_marker.txt || true
           if ! git diff --cached --quiet; then
-            git commit -m "Auto-update plots and index for ${{ steps.probe.outputs.latest_url }}"
+            git commit -m "Auto-update plots for ${{ steps.probe.outputs.latest_url }} (${{ steps.probe.outputs.last_modified }})"
             git push
           else
             echo "No changes to commit."
           fi
 
+      - name: No new forecast — skipping build
+        if: steps.probe.outputs.has_new != 'true'
+        run: echo "NBM dataset unchanged; skipping plot build and commit."
