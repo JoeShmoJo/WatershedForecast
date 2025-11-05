@@ -619,6 +619,11 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
             title=f"{cfg.name} USGS Streamflow — No Associated Gage or Gage Data",
             save_basepath=flow_base,
         )
+        # publish "latest"
+        shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
+        shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
+        logging.info("Created placeholder latest USGS flow plots in %s", out_dir)
+        
 
     # 9) Update stable "latest" copies (good for docs/index.html)
     shutil.copyfile(f"{map_base}.svg", out_dir / "cumulative_map_latest.svg")
