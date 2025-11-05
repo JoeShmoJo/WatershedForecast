@@ -1,137 +1,150 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Watershed Forecast Viewer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      margin: 24px;
-      color: #222;
-      background-color: #fdfdfd;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 10px;
-    }
-    h2 {
-      margin-top: 40px;
-      border-bottom: 2px solid #ccc;
-      padding-bottom: 6px;
-    }
-    .basin {
-      margin-bottom: 48px;
-    }
-    .plots {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: space-around;
-    }
-    .plots img {
-      max-width: 550px;
-      width: 100%;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    .plots div {
-      flex: 1 1 500px;
-      text-align: center;
-    }
-    .plots h3 {
-      font-weight: 500;
-      color: #444;
-    }
-    footer {
-      margin-top: 60px;
-      text-align: center;
-      font-size: 0.9em;
-      color: #666;
-    }
-  </style>
+      body { font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #222; background: #fdfdfd; }
+      h1 { text-align: center; margin-bottom: 10px; }
+      h2 { margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 6px; }
+      .basin { margin-bottom: 48px; }
+      .plots { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around; }
+      .plots img { max-width: 550px; width: 100%; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+      .plots div { flex: 1 1 500px; text-align: center; }
+      .plots h3 { font-weight: 500; color: #444; }
+      footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: #666; }
+    </style>
 </head>
 <body>
   <h1>Watershed Forecast Plots</h1>
-  <p style="text-align:center;">National Blend of Models forcasted precipitation and USGS streamflow summaries.</p>
-  <p style="text-align:center;">Precipitation cut to basin - updated every ~6 hours.</p>
-  <p style="text-align:center;">https://vlab.noaa.gov/web/mdl/nbm</p>
+  <p style="text-align:center;">Automatically updated basin precipitation and streamflow summaries.</p>
 
-  <div class="basin">
-    <h2>Canyon_Creek_WA</h2>
-    <div class="plots">
-      <div>
-        <h3>Cumulative Map</h3>
-        <img src="assets/Canyon_Creek_WA/cumulative_map_latest.svg" alt="Cumulative precipitation map">
-      </div>
-      <div>
-        <h3>Hourly &amp; Cumulative Series</h3>
-        <img src="assets/Canyon_Creek_WA/hourly_series_latest.svg" alt="Hourly and cumulative precipitation series">
-      </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <img src="assets/Canyon_Creek_WA/usgs_flow_latest.svg" alt="USGS flow series">
-      </div>
-    </div>
-  </div>
-
-  <div class="basin">
-    <h2>Hagen_abv_WF_Shoug_WA</h2>
-    <div class="plots">
-      <div>
-        <h3>Cumulative Map</h3>
-        <img src="assets/Hagen_abv_WF_Shoug_WA/cumulative_map_latest.svg" alt="Cumulative precipitation map">
-      </div>
-      <div>
-        <h3>Hourly &amp; Cumulative Series</h3>
-        <img src="assets/Hagen_abv_WF_Shoug_WA/hourly_series_latest.svg" alt="Hourly and cumulative precipitation series">
-      </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <img src="assets/Hagen_abv_WF_Shoug_WA/usgs_flow_latest.svg" alt="USGS flow series">
-      </div>
-    </div>
-  </div>
-
-  <div class="basin">
-    <h2>Little_White_Salmon_at_Hatchery_WA</h2>
-    <div class="plots">
-      <div>
-        <h3>Cumulative Map</h3>
-        <img src="assets/Little_White_Salmon_at_Hatchery_WA/cumulative_map_latest.svg" alt="Cumulative precipitation map">
-      </div>
-      <div>
-        <h3>Hourly &amp; Cumulative Series</h3>
-        <img src="assets/Little_White_Salmon_at_Hatchery_WA/hourly_series_latest.svg" alt="Hourly and cumulative precipitation series">
-      </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <img src="assets/Little_White_Salmon_at_Hatchery_WA/usgs_flow_latest.svg" alt="USGS flow series">
-      </div>
-    </div>
-  </div>
-
-  <div class="basin">
-    <h2>White_Salmon_at_Husum_WA</h2>
-    <div class="plots">
-      <div>
-        <h3>Cumulative Map</h3>
-        <img src="assets/White_Salmon_at_Husum_WA/cumulative_map_latest.svg" alt="Cumulative precipitation map">
-      </div>
-      <div>
-        <h3>Hourly &amp; Cumulative Series</h3>
-        <img src="assets/White_Salmon_at_Husum_WA/hourly_series_latest.svg" alt="Hourly and cumulative precipitation series">
-      </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <img src="assets/White_Salmon_at_Husum_WA/usgs_flow_latest.svg" alt="USGS flow series">
-      </div>
-    </div>
-  </div>
+  
+        <div class="basin">
+          <h2>Canyon_Creek_WA</h2>
+          <div class="plots">
+            
+        <div>
+          <h3>Cumulative Map</h3>
+          <picture>
+            <source srcset="assets/Canyon_Creek_WA/cumulative_map_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Canyon_Creek_WA/cumulative_map_latest.png?v=1762323024" alt="Cumulative Map for Canyon_Creek_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>Hourly &amp;amp; Cumulative Series</h3>
+          <picture>
+            <source srcset="assets/Canyon_Creek_WA/hourly_series_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Canyon_Creek_WA/hourly_series_latest.png?v=1762323024" alt="Hourly &amp;amp; Cumulative Series for Canyon_Creek_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>USGS Streamflow (last 24h)</h3>
+          <picture>
+            <source srcset="assets/Canyon_Creek_WA/usgs_flow_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Canyon_Creek_WA/usgs_flow_latest.png?v=1762323024" alt="USGS Streamflow (last 24h) for Canyon_Creek_WA" />
+          </picture>
+        </div>
+          </div>
+        </div>
+        <div class="basin">
+          <h2>Hagen_abv_WF_Shoug_WA</h2>
+          <div class="plots">
+            
+        <div>
+          <h3>Cumulative Map</h3>
+          <picture>
+            <source srcset="assets/Hagen_abv_WF_Shoug_WA/cumulative_map_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Hagen_abv_WF_Shoug_WA/cumulative_map_latest.png?v=1762323024" alt="Cumulative Map for Hagen_abv_WF_Shoug_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>Hourly &amp;amp; Cumulative Series</h3>
+          <picture>
+            <source srcset="assets/Hagen_abv_WF_Shoug_WA/hourly_series_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Hagen_abv_WF_Shoug_WA/hourly_series_latest.png?v=1762323024" alt="Hourly &amp;amp; Cumulative Series for Hagen_abv_WF_Shoug_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>USGS Streamflow (last 24h)</h3>
+          <picture>
+            <source srcset="assets/Hagen_abv_WF_Shoug_WA/usgs_flow_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Hagen_abv_WF_Shoug_WA/usgs_flow_latest.png?v=1762323024" alt="USGS Streamflow (last 24h) for Hagen_abv_WF_Shoug_WA" />
+          </picture>
+        </div>
+          </div>
+        </div>
+        <div class="basin">
+          <h2>Little_White_Salmon_at_Hatchery_WA</h2>
+          <div class="plots">
+            
+        <div>
+          <h3>Cumulative Map</h3>
+          <picture>
+            <source srcset="assets/Little_White_Salmon_at_Hatchery_WA/cumulative_map_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Little_White_Salmon_at_Hatchery_WA/cumulative_map_latest.png?v=1762323024" alt="Cumulative Map for Little_White_Salmon_at_Hatchery_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>Hourly &amp;amp; Cumulative Series</h3>
+          <picture>
+            <source srcset="assets/Little_White_Salmon_at_Hatchery_WA/hourly_series_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Little_White_Salmon_at_Hatchery_WA/hourly_series_latest.png?v=1762323024" alt="Hourly &amp;amp; Cumulative Series for Little_White_Salmon_at_Hatchery_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>USGS Streamflow (last 24h)</h3>
+          <picture>
+            <source srcset="assets/Little_White_Salmon_at_Hatchery_WA/usgs_flow_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Little_White_Salmon_at_Hatchery_WA/usgs_flow_latest.png?v=1762323024" alt="USGS Streamflow (last 24h) for Little_White_Salmon_at_Hatchery_WA" />
+          </picture>
+        </div>
+          </div>
+        </div>
+        <div class="basin">
+          <h2>White_Salmon_at_Husum_WA</h2>
+          <div class="plots">
+            
+        <div>
+          <h3>Cumulative Map</h3>
+          <picture>
+            <source srcset="assets/White_Salmon_at_Husum_WA/cumulative_map_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/White_Salmon_at_Husum_WA/cumulative_map_latest.png?v=1762323024" alt="Cumulative Map for White_Salmon_at_Husum_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>Hourly &amp;amp; Cumulative Series</h3>
+          <picture>
+            <source srcset="assets/White_Salmon_at_Husum_WA/hourly_series_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/White_Salmon_at_Husum_WA/hourly_series_latest.png?v=1762323024" alt="Hourly &amp;amp; Cumulative Series for White_Salmon_at_Husum_WA" />
+          </picture>
+        </div>
+        <div>
+          <h3>USGS Streamflow (last 24h)</h3>
+          <picture>
+            <source srcset="assets/White_Salmon_at_Husum_WA/usgs_flow_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/White_Salmon_at_Husum_WA/usgs_flow_latest.png?v=1762323024" alt="USGS Streamflow (last 24h) for White_Salmon_at_Husum_WA" />
+          </picture>
+        </div>
+          </div>
+        </div>
+        <div class="basin">
+          <h2>Wind_River_at_Carson_WA</h2>
+          <div class="plots">
+            
+        <div>
+          <h3>USGS Streamflow (last 24h)</h3>
+          <picture>
+            <source srcset="assets/Wind_River_at_Carson_WA/usgs_flow_latest.svg?v=1762323024" type="image/svg+xml" />
+            <img src="assets/Wind_River_at_Carson_WA/usgs_flow_latest.png?v=1762323024" alt="USGS Streamflow (last 24h) for Wind_River_at_Carson_WA" />
+          </picture>
+        </div>
+          </div>
+        </div>
 
   <footer>
-    <p>Generated from <code>WatershedForecast.py</code> — updated automatically on commit.</p>
+    <p>Generated from <code>WatershedForecast.py</code> — updated automatically.</p>
   </footer>
 </body>
 </html>
