@@ -100,15 +100,3 @@ jobs:
             echo "No changes to commit."
           fi
 
-      - name: Commit index.html if changed (even if no new forecast)
-        if: steps.probe.outputs.has_new != 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html || true
-          if ! git diff --cached --quiet; then
-            git commit -m "Auto-rebuild index.html from Config.json (no new forecast)"
-            git push
-          else
-            echo "Index unchanged; nothing to commit."
-          fi
