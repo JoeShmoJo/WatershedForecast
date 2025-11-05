@@ -590,7 +590,11 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
     )
 
     # 8.5) USGS streamflow (optional per Config.json)
+    # --- inside run_one(), replace your whole USGS block with this ---
     if cfg.USGS_id:
+        flow_base = str(out_dir / f"usgs_flow_{stamp}")
+
+        # Try to fetch data; on any failure, fall back to placeholder
         try:
             end_time = hourly_series_in.index.max()
             if isinstance(end_time, np.datetime64):
@@ -599,39 +603,30 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
                 end_time = end_time.replace(tzinfo=timezone.utc)
 
             flow_series = get_usgs_flow(cfg.USGS_id, end_time.to_pydatetime())
-            flow_base = str(out_dir / f"usgs_flow_{stamp}")
-            plot_usgs_flow(
-                flow_series,
-                title=f"{cfg.name} USGS Streamflow at {cfg.USGS_location} (Site {cfg.USGS_id}) — local time",
-                save_basepath=flow_base,
-            )
-            # publish "latest"
-            shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
-            shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
-            logging.info("Updated latest USGS flow symlikes in %s", out_dir)
+            title = f"{cfg.name} USGS Streamflow at {cfg.USGS_location} (Site {cfg.USGS_id}) — local time"
         except Exception as e:
-            logging.error("USGS flow step failed for %s (%s): %s", cfg.name, cfg.USGS_id, e)
+            logging.warning("USGS fetch failed for %s (%s): %s — creating placeholder.",
+                            cfg.name, cfg.USGS_id, e)
+            flow_series = None
+            title = f"{cfg.name} USGS Streamflow — No recent data"
+
+        # ALWAYS produce a figure (real or placeholder) and publish "latest"
+        plot_usgs_flow(flow_series, title=title, save_basepath=flow_base)
+        shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
+        shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
+        logging.info("Updated latest USGS flow symlikes in %s", out_dir)
+
     else:
-        # create dummy plot that is a blank rectangle with "No Associated Gage or Gage Data"
+        # No gage configured: publish a placeholder so the index always has something to show
         flow_base = str(out_dir / f"usgs_flow_{stamp}")
         plot_usgs_flow(
             None,
-            title=f"{cfg.name} USGS Streamflow — No Associated Gage or Gage Data",
+            title=f"{cfg.name} USGS Streamflow — No Associated Gage",
             save_basepath=flow_base,
         )
-        # publish "latest"
         shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
         shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
         logging.info("Created placeholder latest USGS flow plots in %s", out_dir)
-        
-
-    # 9) Update stable "latest" copies (good for docs/index.html)
-    shutil.copyfile(f"{map_base}.svg", out_dir / "cumulative_map_latest.svg")
-    shutil.copyfile(f"{map_base}.png", out_dir / "cumulative_map_latest.png")
-    shutil.copyfile(f"{ts_base}.svg",  out_dir / "hourly_series_latest.svg")
-    shutil.copyfile(f"{ts_base}.png",  out_dir / "hourly_series_latest.png")
-
-    logging.info("Saved outputs to %s", out_dir)
 
 
 def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool = True,
