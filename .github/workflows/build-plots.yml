@@ -33,10 +33,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install system deps for GeoPandas/Shapely/GDAL
+      - name: Install system deps (GeoPandas/Shapely/GDAL + jq)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gdal-bin libgdal-dev libspatialindex-dev
+          sudo apt-get install -y gdal-bin libgdal-dev libspatialindex-dev jq
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -48,11 +48,21 @@ jobs:
 
       - name: Install Python packages
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel
           pip install geopandas shapely xarray matplotlib pandas requests netCDF4 rtree
 
+      # Rebuild index.html every run so new basins appear immediately
+      - name: Rebuild index.html from Config.json (always)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from WatershedForecast import build_index_from_config
+          build_index_from_config(Path("."))
+          print("index.html rebuilt.")
+          PY
+
       # ---- Probe NOMADS for newest NBM 1-hr blend URL ----
-      - name: Probe latest forecast URL (skip if unchanged)
+      - name: Probe latest forecast URL (skip heavy build if unchanged)
         id: probe
         shell: bash
         run: |
@@ -77,19 +87,28 @@ jobs:
         run: |
           echo "${{ steps.probe.outputs.latest_url }}" > .github/last_forecast_url.txt
 
-      - name: Commit updated docs assets and marker
+      - name: Commit updated docs assets, index.html, and marker
         if: steps.probe.outputs.has_new == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/assets .github/last_forecast_url.txt || true
+          git add docs/assets docs/index.html .github/last_forecast_url.txt || true
           if ! git diff --cached --quiet; then
-            git commit -m "Auto-update plots for ${{ steps.probe.outputs.latest_url }}"
+            git commit -m "Auto-update plots and index for ${{ steps.probe.outputs.latest_url }}"
             git push
           else
             echo "No changes to commit."
           fi
 
-      - name: No new forecast — skipping build
+      - name: Commit index.html if changed (even if no new forecast)
         if: steps.probe.outputs.has_new != 'true'
-        run: echo "Latest forecast unchanged; skipping build and commit."
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html || true
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto-rebuild index.html from Config.json (no new forecast)"
+            git push
+          else
+            echo "Index unchanged; nothing to commit."
+          fi
