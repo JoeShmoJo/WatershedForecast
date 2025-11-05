@@ -47,6 +47,10 @@ from shapely.prepared import prep as prepare_polygon
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+
 
 # ----------------------------
 # Logging
@@ -183,6 +187,21 @@ def build_index_from_config(root: Path):
 """
     (docs_dir / "index.html").write_text(html_out, encoding="utf-8")
     logging.info("Rebuilt docs/index.html")
+
+# ----------------------------
+# Multiprocessing helper
+# ----------------------------
+def _run_one_from_dict(args):
+    """Helper to run a single basin in a separate process."""
+    (cfg_dict, offline, s_timeout, s_retries) = args
+    cfg = RunConfig(**cfg_dict)
+    try:
+        run_one(cfg, offline=offline, streamstats_timeout=s_timeout, streamstats_retries=s_retries)
+        return (cfg.name, None)
+    except Exception as e:
+        # Return the error so parent can log it
+        return (cfg.name, str(e))
+
 
 
 # ----------------------------
@@ -761,36 +780,136 @@ def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool 
             logging.exception("Failed for %s: %s", name, e)
     build_index_from_config(root)
 
+def run_all_parallel(root: Path,
+                     hours: int = 24,
+                     upscale: int = 4,
+                     area_weighting: bool = True,
+                     basins_dir: Path = Path("Basins"),
+                     offline: bool = False,
+                     streamstats_timeout: int = 30,
+                     streamstats_retries: int = 5,
+                     workers: int | None = None):
+    """
+    Run all basins in parallel processes, then rebuild index.html once.
+    """
+    cfg_json = load_config_file(root)
+
+    # Build configs
+    cfgs: list[RunConfig] = []
+    for name, info in cfg_json.items():
+        cfgs.append(RunConfig(
+            name=name,
+            state=str(info["state"]),
+            lattitude=float(info["latitude"]),
+            longitude=float(info["longitude"]),
+            USGS_id=str(info.get("USGS_id", "")),
+            USGS_location=str(info.get("USGS_location", "")),
+            hours=hours,
+            upscale_factor=upscale,
+            area_weighting=area_weighting,
+            root=root,
+            basins_dir=basins_dir,
+        ))
+
+    # Optional: prefetch geometries serially so StreamStats isn't hit in parallel
+    for cfg in cfgs:
+        try:
+            _ = get_watershed_basin(cfg, offline=offline,
+                                    streamstats_timeout=streamstats_timeout,
+                                    streamstats_retries=streamstats_retries)
+        except Exception as e:
+            logging.warning("Prefetch basin failed for %s: %s", cfg.name, e)
+
+    # Decide worker count
+    if workers is None or workers <= 0:
+        workers = max(1, (os.cpu_count() or 2) - 0)  # tweak if you want
+
+    # Submit tasks
+    futs = []
+    args_list = [(
+        cfg.__dict__,  # dict is easy to pickle
+        offline,
+        streamstats_timeout,
+        streamstats_retries,
+    ) for cfg in cfgs]
+
+    logging.info("Starting parallel run for %d basins with %d workers…", len(cfgs), workers)
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        for args in args_list:
+            futs.append(ex.submit(_run_one_from_dict, args))
+
+        # Gather results as they complete
+        any_error = False
+        for fut in as_completed(futs):
+            name, err = fut.result()
+            if err:
+                any_error = True
+                logging.error("Basin %s failed: %s", name, err)
+            else:
+                logging.info("Basin %s finished OK", name)
+
+    # Rebuild index once
+    build_index_from_config(root)
+
+    if any_error:
+        logging.warning("One or more basins failed. See logs above.")
+
+
 
 # ----------------------------
 # CLI
 # ----------------------------
 def main():
-    parser = argparse.ArgumentParser(description="NBM basin precipitation forecast plots → docs/assets for GitHub Pages.")
-    parser.add_argument("--root", type=str, default=".", help="Repo root (where Config.json lives). Default: current dir")
-    parser.add_argument("--basin", type=str, default=None, help="Run a single basin by name (must match a Config.json key)")
-    parser.add_argument("--all", action="store_true", help="Run all basins in Config.json")
-    parser.add_argument("--hours", type=int, default=24, help="Forecast hours to use (from t=0). Default: 24")
-    parser.add_argument("--upscale", type=int, default=4, help="Fine-grid upscale factor (1–4). Default: 4")
-    parser.add_argument("--no-area-weighting", action="store_true", help="Disable cos(lat) area weighting")
-    parser.add_argument("--basins-dir", type=str, default="Basins", help="Folder where basin caches live. Default: Basins")
-    parser.add_argument("--offline", action="store_true", help="Do not call StreamStats; require cached Basins/<name>/basin.geojson.")
-    parser.add_argument("--streamstats-timeout", type=int, default=30, help="Per-request timeout for StreamStats (seconds).")
-    parser.add_argument("--streamstats-retries", type=int, default=5, help="Number of retries for StreamStats.")
+    parser = argparse.ArgumentParser(
+        description="NBM basin precipitation forecast plots → docs/assets for GitHub Pages."
+    )
+    parser.add_argument("--root", type=str, default=".",
+                        help="Repo root (where Config.json lives). Default: current dir")
+    parser.add_argument("--basin", type=str, default=None,
+                        help="Run a single basin by name (must match a Config.json key)")
+    parser.add_argument("--all", action="store_true",
+                        help="Run all basins in Config.json")
+    parser.add_argument("--hours", type=int, default=24,
+                        help="Forecast hours to use (from t=0). Default: 24")
+    parser.add_argument("--upscale", type=int, default=4,
+                        help="Fine-grid upscale factor (1–4). Default: 4")
+    parser.add_argument("--no-area-weighting", action="store_true",
+                        help="Disable cos(lat) area weighting")
+    parser.add_argument("--basins-dir", type=str, default="Basins",
+                        help="Folder where basin caches live. Default: Basins")
+    parser.add_argument("--offline", action="store_true",
+                        help="Do not call StreamStats; require cached Basins/<name>/basin.geojson.")
+    parser.add_argument("--streamstats-timeout", type=int, default=30,
+                        help="Per-request timeout for StreamStats (seconds).")
+    parser.add_argument("--streamstats-retries", type=int, default=5,
+                        help="Number of retries for StreamStats.")
+    parser.add_argument("--workers", type=int, default=1,
+                        help="Parallel workers for --all (processes). 1 = serial.")
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
     basins_dir = Path(args.basins_dir)
 
     if args.all:
-        run_all(root=root,
-                hours=args.hours,
-                upscale=args.upscale,
-                area_weighting=(not args.no_area_weighting),
-                basins_dir=basins_dir,
-                offline=args.offline,
-                streamstats_timeout=args.streamstats_timeout,
-                streamstats_retries=args.streamstats_retries)
+        if args.workers and args.workers > 1:
+            run_all_parallel(root=root,
+                             hours=args.hours,
+                             upscale=args.upscale,
+                             area_weighting=(not args.no_area_weighting),
+                             basins_dir=basins_dir,
+                             offline=args.offline,
+                             streamstats_timeout=args.streamstats_timeout,
+                             streamstats_retries=args.streamstats_retries,
+                             workers=args.workers)
+        else:
+            run_all(root=root,
+                    hours=args.hours,
+                    upscale=args.upscale,
+                    area_weighting=(not args.no_area_weighting),
+                    basins_dir=basins_dir,
+                    offline=args.offline,
+                    streamstats_timeout=args.streamstats_timeout,
+                    streamstats_retries=args.streamstats_retries)
         return
 
     if not args.basin:
@@ -814,7 +933,10 @@ def main():
         root=root,
         basins_dir=basins_dir,
     )
-    run_one(cfg, offline=args.offline, streamstats_timeout=args.streamstats_timeout, streamstats_retries=args.streamstats_retries)
+    run_one(cfg,
+            offline=args.offline,
+            streamstats_timeout=args.streamstats_timeout,
+            streamstats_retries=args.streamstats_retries)
 
 
 if __name__ == "__main__":
