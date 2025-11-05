@@ -84,111 +84,6 @@ def load_config_file(root: Path) -> Dict[str, Dict[str, float | str]]:
     with open(cfg_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
-def build_index_from_config(root: Path):
-    """
-    Generate docs/index.html based on Config.json and whatever plots exist
-    under docs/assets/<BASIN>. Uses SVG with PNG fallback and adds a cache-buster
-    so GitHub Pages doesn't serve stale images.
-    """
-    cfg_path = root / "Config.json"
-    docs_dir = root / "docs"
-    assets_dir = docs_dir / "assets"
-    docs_dir.mkdir(parents=True, exist_ok=True)
-
-    # Load basin order from Config.json
-    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-    basin_names = list(cfg.keys())
-
-    # cache-buster (changes each run)
-    stamp = int(pd.Timestamp.now(tz="America/Los_Angeles").timestamp())
-    def pic_block(basin: str, base: str, title: str) -> str:
-        # base is name without extension, e.g., 'cumulative_map_latest'
-        safe = html_escape.escape(basin)
-        svg_rel = f"assets/{safe}/{base}.svg"
-        png_rel = f"assets/{safe}/{base}.png"
-        svg_src = f"{svg_rel}?v={stamp}"
-        png_src = f"{png_rel}?v={stamp}"
-        return f"""
-        <div>
-          <h3>{html_escape.escape(title)}</h3>
-          <picture>
-            <source srcset="{svg_src}" type="image/svg+xml" />
-            <img src="{png_src}" alt="{html_escape.escape(title)} for {safe}" />
-          </picture>
-        </div>"""
-
-    sections = []
-    for basin in basin_names:
-        safe = html_escape.escape(basin)
-        bdir = assets_dir / basin
-
-        # Check which *_latest files exist; we’ll render cards only for files present.
-        have_map  = (bdir / "cumulative_map_latest.svg").exists() or (bdir / "cumulative_map_latest.png").exists()
-        have_ts   = (bdir / "hourly_series_latest.svg").exists() or (bdir / "hourly_series_latest.png").exists()
-        have_flow = (bdir / "usgs_flow_latest.svg").exists() or (bdir / "usgs_flow_latest.png").exists()
-
-        # If nothing yet, show a friendly placeholder section
-        if not (have_map or have_ts or have_flow):
-            sections.append(f"""
-            <div class="basin">
-              <h2>{safe}</h2>
-              <p>No plots yet.</p>
-            </div>""")
-            continue
-
-        cards = []
-        if have_map:
-            cards.append(pic_block(basin, "cumulative_map_latest", "Cumulative Map"))
-        if have_ts:
-            cards.append(pic_block(basin, "hourly_series_latest", "Hourly and Cumulative Series"))
-        if have_flow:
-            cards.append(pic_block(basin, "usgs_flow_latest", "USGS Streamflow (last 24h)"))
-
-        sections.append(f"""
-        <div class="basin">
-          <h2>{safe}</h2>
-          <div class="plots">
-            {''.join(cards)}
-          </div>
-        </div>""")
-
-    CSS = """
-      body { font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #222; background: #fdfdfd; }
-      h1 { text-align: center; margin-bottom: 10px; }
-      h2 { margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 6px; }
-      .basin { margin-bottom: 48px; }
-      .plots { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around; }
-      .plots img { max-width: 550px; width: 100%; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-      .plots div { flex: 1 1 500px; text-align: center; }
-      .plots h3 { font-weight: 500; color: #444; }
-      footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: #666; }
-    """
-
-    html_out = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Watershed Forecast Viewer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>{CSS}</style>
-</head>
-<body>
-  <h1>Watershed Forecast Plots</h1>
-  <p style="text-align:center;">National Blend of Models basin precipitation forecast and USGS streamflow summaries.</p>
-  <p style="text-align:center;">Precipitation grids cut to basin. Forecasts updated every ~6 hours. https://vlab.noaa.gov/web/mdl/nbm </p>
-
-  {''.join(sections)}
-
-  <footer>
-    <p>Generated from <code>WatershedForecast.py</code> — updated automatically.</p>
-  </footer>
-</body>
-</html>
-"""
-    (docs_dir / "index.html").write_text(html_out, encoding="utf-8")
-    logging.info("Rebuilt docs/index.html")
-
 # ----------------------------
 # Multiprocessing helper
 # ----------------------------
@@ -753,7 +648,7 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
         shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
         shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
         logging.info("Created placeholder latest USGS flow plots in %s", out_dir)
-    build_index_from_config(cfg.root)
+    
         
 
 
@@ -779,7 +674,7 @@ def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool 
             run_one(cfg, offline=offline, streamstats_timeout=streamstats_timeout, streamstats_retries=streamstats_retries)
         except Exception as e:
             logging.exception("Failed for %s: %s", name, e)
-    build_index_from_config(root)
+    
 
 def run_all_parallel(root: Path,
                      hours: int = 24,
@@ -849,8 +744,7 @@ def run_all_parallel(root: Path,
             else:
                 logging.info("Basin %s finished OK", name)
 
-    # Rebuild index once
-    build_index_from_config(root)
+
 
     if any_error:
         logging.warning("One or more basins failed. See logs above.")
