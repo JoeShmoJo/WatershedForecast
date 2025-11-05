@@ -4,7 +4,7 @@
 """
 WatershedForecast.py (single-axis version)
 
-- Reads Config.json for named basins (state, lat, lon)
+- Reads Config.json for named basins (state, lat, lon, optional USGS_id/location)
 - Downloads NBM 1-hr precip via NOMADS OPeNDAP
 - Boundary-hour correction for 6h accumulation edge hours
 - Fine-grid bilinear upscaling + basin mask (center-in-polygon)
@@ -12,6 +12,7 @@ WatershedForecast.py (single-axis version)
 - Single x-axis: majors at local midnights inside window (date labels),
   minors every 3 hours (HH:MM)
 - Saves PNG+SVG under docs/assets/<BASIN_NAME>/ and updates *_latest.svg/png
+- Optional USGS streamflow (00060) past 24h plot → usgs_flow_latest.[png|svg]
 - CLI: --basin NAME | --all, plus --offline / timeouts / retries
 """
 
@@ -62,13 +63,15 @@ logging.basicConfig(
 class RunConfig:
     name: str
     state: str
-    lat: float
-    lon: float
+    lattitude: float
+    longitude: float
+    USGS_id: str = ""
+    USGS_location: str = ""
     hours: int = 24
     upscale_factor: int = 4
     area_weighting: bool = True
-    root: Path = Path(".")          # repo root (where Config.json lives)
-    basins_dir: Path = Path("Basins")  # cache dir for basin geojsons
+    root: Path = Path(".")            # repo root (where Config.json lives)
+    basins_dir: Path = Path("Basins") # cache dir for basin geojsons
 
 
 def load_config_file(root: Path) -> Dict[str, Dict[str, float | str]]:
@@ -181,6 +184,61 @@ def open_nbm_subset(opendap_url: str, basin: Polygon, hours: int) -> Tuple[xr.Da
     return qpf, (minx, miny, maxx, maxy)
 
 
+# ---- USGS NWIS (Instantaneous Values) for discharge 00060 (past 24h) ----
+def get_usgs_flow(usgs_id: str, end_time: datetime) -> pd.Series:
+    """
+    Fetch past 24h discharge (00060) for a site.
+    Returns a Series indexed in America/Los_Angeles (tz-aware).
+    """
+    # Ensure end_time is UTC-aware
+    # make end_time current time 
+    end_time = datetime.now(timezone.utc)
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    else:
+        end_time = end_time.astimezone(timezone.utc)
+
+    start_time = end_time - timedelta(hours=24)
+
+    # Use Z (UTC) to avoid ambiguity
+    url = (
+        "https://waterservices.usgs.gov/nwis/iv/?format=json"
+        f"&sites={usgs_id}"
+        "&parameterCd=00060"
+        f"&startDT={start_time.strftime('%Y-%m-%dT%H:%MZ')}"
+        f"&endDT={end_time.strftime('%Y-%m-%dT%H:%MZ')}"
+        "&siteStatus=all"
+    )
+
+    try:
+        r = requests.get(url, timeout=20)
+        r.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"USGS request failed for site {usgs_id}: {e}") from e
+
+    data = r.json()
+    ts = data.get("value", {}).get("timeSeries", [])
+    if not ts:
+        raise ValueError(f"USGS site {usgs_id}: no timeSeries in response.")
+
+    vals = ts[0].get("values", [])
+    if not vals or not vals[0].get("value"):
+        raise ValueError(f"USGS site {usgs_id}: empty values array.")
+
+    recs = vals[0]["value"]
+    times = [pd.to_datetime(rec["dateTime"], utc=True) for rec in recs]  # tz-aware UTC
+    flows = [float(rec["value"]) for rec in recs]
+
+    ser = pd.Series(flows, index=pd.DatetimeIndex(times)).sort_index()
+    ser = ser.tz_convert("America/Los_Angeles")
+
+    logging.info("USGS %s: fetched %d points from %s to %s (local).",
+                 usgs_id, len(ser),
+                 ser.index.min().strftime('%Y-%m-%d %H:%M %Z') if len(ser) else "n/a",
+                 ser.index.max().strftime('%Y-%m-%d %H:%M %Z') if len(ser) else "n/a")
+    return ser
+
+
 # ----------------------------
 # Basin geometry (cache-first, legacy fallback, optional offline)
 # ----------------------------
@@ -217,7 +275,7 @@ def get_watershed_basin(cfg: RunConfig, offline: bool = False, streamstats_timeo
     # Fetch from StreamStats with retries/backoff
     url = (
         "https://streamstats.usgs.gov/streamstatsservices/watershed.geojson?"
-        f"rcode={cfg.state}&xlocation={cfg.lon}&ylocation={cfg.lat}&crs=4326"
+        f"rcode={cfg.state}&xlocation={cfg.longitude}&ylocation={cfg.lattitude}&crs=4326"
         "&includeparameters=false&includeflowtypes=false&includefeatures=true&simplify=true"
     )
     session, timeout = make_retrying_session(total=streamstats_retries, backoff=1.5, timeout=streamstats_timeout)
@@ -323,6 +381,10 @@ def style_inrange_day_majors_3h_minors(ax, tindex, hour_step=3):
       - Major ticks: local midnights strictly inside the data window (date labels)
       - Minor ticks: every `hour_step` hours (HH:MM labels)
     """
+    # Guard: ensure tz-aware
+    if getattr(tindex, "tz", None) is None:
+        tindex = tindex.tz_localize("UTC")
+
     tz = tindex.tz
     tmin, tmax = tindex.min(), tindex.max()
 
@@ -338,7 +400,7 @@ def style_inrange_day_majors_3h_minors(ax, tindex, hour_step=3):
         ax.xaxis.set_major_locator(NullLocator())
         ax.xaxis.set_major_formatter(NullFormatter())
 
-    # minors every 3 hours
+    # minors every N hours
     ax.xaxis.set_minor_locator(HourLocator(byhour=range(0, 24, hour_step), tz=tz))
     ax.xaxis.set_minor_formatter(DateFormatter('%H:%M', tz=tz))
 
@@ -393,7 +455,6 @@ def plot_cumulative_map(basin: Polygon,
     ax.set_aspect("equal")
     ax.set_xlim(minx - 0.01, maxx + 0.01)
     ax.set_ylim(miny - 0.01, maxy + 0.01)
-    # No tight_layout here (extra cax); we save with bbox_inches='tight'
     if save_basepath:
         fig.savefig(f"{save_basepath}.png", dpi=160, bbox_inches="tight")
         fig.savefig(f"{save_basepath}.svg", bbox_inches="tight")
@@ -425,11 +486,59 @@ def plot_hourly_and_cumulative_local(hourly_in_utc: pd.Series, title: str, save_
     ax1.set_title(title)
     ax1.legend()
 
-    # Save
     if save_basepath:
         fig.savefig(f"{save_basepath}.png", dpi=160, bbox_inches="tight")
         fig.savefig(f"{save_basepath}.svg", bbox_inches="tight")
     plt.close(fig)
+
+
+def plot_usgs_flow(flow_series: pd.Series | None,
+                   title: str,
+                   save_basepath: str | None = None,
+                   hour_step: int = 3):
+    """Plot USGS flow if available; otherwise save a blank/placeholder canvas."""
+    # Create figure up front
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Nothing to plot?
+    empty = (
+        flow_series is None
+        or len(flow_series) == 0
+        or len(flow_series.dropna()) == 0
+    )
+
+    if empty:
+        # Clean blank canvas with a subtle message
+        ax.set_axis_off()
+        fig.suptitle(title, y=0.98, fontsize=14)
+        fig.text(0.5, 0.50, "No recent USGS data available",
+                 ha="center", va="center", fontsize=12, alpha=0.6)
+    else:
+        # Ensure tz-aware + local for tick styling
+        idx = flow_series.index
+        if getattr(idx, "tz", None) is None:
+            idx = idx.tz_localize("UTC")
+            flow_series.index = idx
+        flow_series = flow_series.tz_convert("America/Los_Angeles")
+
+        ax.plot(flow_series.index, flow_series.values,
+                marker="o", color="tab:green", label="Discharge (cfs)")
+
+        style_inrange_day_majors_3h_minors(ax, flow_series.index, hour_step=hour_step)
+        ax.set_xlim(flow_series.index.min(), flow_series.index.max())
+        ax.margins(x=0.01)
+
+        ax.set_ylabel("Discharge (cfs)")
+        ax.set_xlabel("Local time")
+        ax.set_title(title)
+        ax.legend()
+
+    # Save no matter what so index.html can always reference the files
+    if save_basepath:
+        fig.savefig(f"{save_basepath}.png", dpi=160, bbox_inches="tight")
+        fig.savefig(f"{save_basepath}.svg", bbox_inches="tight")
+    plt.close(fig)
+
 
 
 # ----------------------------
@@ -466,9 +575,9 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = pd.Timestamp.now(tz="America/Los_Angeles").strftime("%Y%m%d_%H%M")
     map_base = str(out_dir / f"cumulative_map_{stamp}")
-    ts_base = str(out_dir / f"hourly_series_{stamp}")
+    ts_base  = str(out_dir / f"hourly_series_{stamp}")
 
-    # 8) Save plots
+    # 8) Save plots (precip)
     plot_cumulative_map(
         basin, lat_f, lon_f, dlat_f, dlon_f, mask, fine_cum,
         title=f"{cfg.name} — Basin cumulative precipitation (fine grid x{cfg.upscale_factor})",
@@ -480,16 +589,42 @@ def run_one(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30
         save_basepath=ts_base,
     )
 
-    # 9) Update stable "latest" copies (good for docs/index.html)
-    latest_map_svg = out_dir / "cumulative_map_latest.svg"
-    latest_map_png = out_dir / "cumulative_map_latest.png"
-    latest_ts_svg  = out_dir / "hourly_series_latest.svg"
-    latest_ts_png  = out_dir / "hourly_series_latest.png"
+    # 8.5) USGS streamflow (optional per Config.json)
+    if cfg.USGS_id:
+        try:
+            end_time = hourly_series_in.index.max()
+            if isinstance(end_time, np.datetime64):
+                end_time = pd.to_datetime(end_time)
+            if end_time.tzinfo is None:
+                end_time = end_time.replace(tzinfo=timezone.utc)
 
-    shutil.copyfile(f"{map_base}.svg", latest_map_svg)
-    shutil.copyfile(f"{map_base}.png", latest_map_png)
-    shutil.copyfile(f"{ts_base}.svg", latest_ts_svg)
-    shutil.copyfile(f"{ts_base}.png", latest_ts_png)
+            flow_series = get_usgs_flow(cfg.USGS_id, end_time.to_pydatetime())
+            flow_base = str(out_dir / f"usgs_flow_{stamp}")
+            plot_usgs_flow(
+                flow_series,
+                title=f"{cfg.name} USGS Streamflow at {cfg.USGS_location} (Site {cfg.USGS_id}) — local time",
+                save_basepath=flow_base,
+            )
+            # publish "latest"
+            shutil.copyfile(f"{flow_base}.svg", out_dir / "usgs_flow_latest.svg")
+            shutil.copyfile(f"{flow_base}.png", out_dir / "usgs_flow_latest.png")
+            logging.info("Updated latest USGS flow symlikes in %s", out_dir)
+        except Exception as e:
+            logging.error("USGS flow step failed for %s (%s): %s", cfg.name, cfg.USGS_id, e)
+    else:
+        # create dummy plot that is a blank rectangle with "No Associated Gage or Gage Data"
+        flow_base = str(out_dir / f"usgs_flow_{stamp}")
+        plot_usgs_flow(
+            None,
+            title=f"{cfg.name} USGS Streamflow — No Associated Gage or Gage Data",
+            save_basepath=flow_base,
+        )
+
+    # 9) Update stable "latest" copies (good for docs/index.html)
+    shutil.copyfile(f"{map_base}.svg", out_dir / "cumulative_map_latest.svg")
+    shutil.copyfile(f"{map_base}.png", out_dir / "cumulative_map_latest.png")
+    shutil.copyfile(f"{ts_base}.svg",  out_dir / "hourly_series_latest.svg")
+    shutil.copyfile(f"{ts_base}.png",  out_dir / "hourly_series_latest.png")
 
     logging.info("Saved outputs to %s", out_dir)
 
@@ -502,8 +637,10 @@ def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool 
         cfg = RunConfig(
             name=name,
             state=str(info["state"]),
-            lat=float(info["latitude"]),
-            lon=float(info["longitude"]),
+            lattitude=float(info["latitude"]),
+            longitude=float(info["longitude"]),
+            USGS_id=str(info.get("USGS_id", "")),
+            USGS_location=str(info.get("USGS_location", "")),
             hours=hours,
             upscale_factor=upscale,
             area_weighting=area_weighting,
@@ -558,8 +695,10 @@ def main():
     cfg = RunConfig(
         name=args.basin,
         state=str(info["state"]),
-        lat=float(info["latitude"]),
-        lon=float(info["longitude"]),
+        lattitude=float(info["latitude"]),
+        longitude=float(info["longitude"]),
+        USGS_id=str(info.get("USGS_id", "")),
+        USGS_location=str(info.get("USGS_location", "")),
         hours=args.hours,
         upscale_factor=args.upscale,
         area_weighting=(not args.no_area_weighting),

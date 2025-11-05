@@ -2,12 +2,16 @@
   "Canyon_Creek_WA": {
     "state": "WA",
     "latitude": 45.9404,
-    "longitude": -122.3226
+    "longitude": -122.3226,
+    "USGS_id": "14219000",
+    "USGS_location": "Canyon Creek Near Amboy, WA"
   },
   "Hagen_abv_WF_Shoug_WA": {
     "state": "WA",
     "latitude": 45.6842,
-    "longitude": -122.2433
+    "longitude": -122.2433,
+    "USGS_id": "14143500",
+    "USGS_location": "Washougal River Near Washougal, WA"
   },
   "Little_White_Salmon_at_Hatchery_WA": {
     "state": "WA",
@@ -17,6 +21,8 @@
   "White_Salmon_at_Husum_WA": {
     "state": "WA",
     "latitude": 45.7978,
-    "longitude": -121.4862
+    "longitude": -121.4862,
+    "USGS_id": "14123500",
+    "USGS_location": "White Salmon River Near Underwood, WA"
   }
 }
