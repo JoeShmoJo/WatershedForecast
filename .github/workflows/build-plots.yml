@@ -82,7 +82,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/assets docs/index.html .github/last_forecast_url.txt || true
+          git add docs/assets .github/last_forecast_url.txt || true
           if ! git diff --cached --quiet; then
             git commit -m "Auto-update plots and index for ${{ steps.probe.outputs.latest_url }}"
             git push
