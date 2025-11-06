@@ -13,87 +13,101 @@ on:
     - cron: "45 20 * * *"  # 18Z late
   workflow_dispatch: {}
 
+permissions:
+  contents: write   # allow committing artifacts back to the repo (optional)
+
 concurrency:
   group: build-plots
   cancel-in-progress: true
 
-permissions:
-  contents: write
+env:
+  PYTHON_VERSION: "3.11"
+  # Adjust to your script path. If your script lives at repo root, set to "WatershedForecast.py"
+  SCRIPT_PATH: "MyApps/WatershedForecast/WatershedForecast.py"
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Python (with pip cache)
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
-          cache-dependency-path: |
-            requirements.txt
-            requirements-*.txt
+          fetch-depth: 1
 
-      # Install jq here so we can safely parse JSON outputs from the probe
-      - name: Install system deps (Geo stack + jq)
+      - name: Debug workspace (what files do we have?)
+        run: |
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Commit: $GITHUB_SHA"
+          echo "Repo root (pwd): $(pwd)"
+          echo "--- top-level listing ---"
+          ls -la
+          echo "--- find likely dependency files ---"
+          find . -maxdepth 3 -type f \( -iname "requirements*.txt" -o -iname "pyproject.toml" \) -print || true
+          echo "--- show workflow file ---"
+          ls -la .github/workflows || true
+
+      # Optional: needed by rtree if you install it
+      - name: Install system packages needed by rtree (optional)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gdal-bin libgdal-dev libspatialindex-dev jq
+          sudo apt-get install -y libspatialindex-dev
 
-      # ---- Probe NOMADS for newest NBM 1-hr blend URL and freshness marker ----
-      - name: Probe latest forecast URL (skip heavy build if unchanged)
-        id: probe
-        run: |
-          set -euo pipefail
-          python .github/scripts/probe.py
-          echo "Probe output:"
-          cat /tmp/probe.json
-          latest_url=$(jq -r '.latest_url' /tmp/probe.json)
-          last_modified=$(jq -r '.last_modified' /tmp/probe.json)
-          has_new=$(jq -r '.has_new' /tmp/probe.json)
-          echo "latest_url=${latest_url}" >> "$GITHUB_OUTPUT"
-          echo "last_modified=${last_modified}" >> "$GITHUB_OUTPUT"
-          echo "has_new=${has_new}" >> "$GITHUB_OUTPUT"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            MyApps/WatershedForecast/requirements.txt
+            **/pyproject.toml
 
-      - name: Install Python packages
-        if: steps.probe.outputs.has_new == 'true'
+      # Use a safe shell step instead of third-party installers so we can tolerate missing files
+      - name: Install dependencies (if present, else fallback)
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
+          set -e
           if [ -f requirements.txt ]; then
+            echo "Installing from ./requirements.txt"
             pip install -r requirements.txt
+          elif [ -f MyApps/WatershedForecast/requirements.txt ]; then
+            echo "Installing from MyApps/WatershedForecast/requirements.txt"
+            pip install -r MyApps/WatershedForecast/requirements.txt
+          elif [ -f pyproject.toml ]; then
+            echo "Installing from pyproject.toml (PEP 517)"
+            pip install .
           else
-            pip install geopandas shapely xarray matplotlib pandas requests netCDF4 rtree
+            echo "No dependency file found; installing a minimal set as fallback."
+            pip install numpy pandas xarray requests matplotlib geopandas shapely pyproj rtree
           fi
 
-      - name: Build plots (offline, using cached basin geojsons)
-        if: steps.probe.outputs.has_new == 'true'
-        env:
-          # Lock the dataset URL for the whole run so all basins use the same cycle
-          NBM_URL: ${{ steps.probe.outputs.latest_url }}
+      - name: Run forecast script
         run: |
-          python WatershedForecast.py --all --offline
+          python "${{ env.SCRIPT_PATH }}"
 
-      - name: Update last_forecast marker
-        if: steps.probe.outputs.has_new == 'true'
-        run: |
-          printf "%s\n%s\n" "${{ steps.probe.outputs.latest_url }}" "${{ steps.probe.outputs.last_modified }}" > .github/last_forecast_marker.txt
+      # If your script writes PNGs/HTML into known folders, upload them as artifacts
+      - name: Upload plots (artifacts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plots
+          path: |
+            **/*.png
+            **/*.html
+          if-no-files-found: ignore
 
-      - name: Commit updated docs assets and marker (not index.html)
-        if: steps.probe.outputs.has_new == 'true'
+      # Optional: commit generated outputs (e.g., docs/ or images/) back to the branch
+      - name: Commit & push generated outputs (optional)
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/assets .github/last_forecast_marker.txt || true
-          if ! git diff --cached --quiet; then
-            git commit -m "Auto-update plots for ${{ steps.probe.outputs.latest_url }} (${{ steps.probe.outputs.last_modified }})"
-            git push
-          else
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Add paths you actually want committed (adjust as needed)
+          git add -A
+          if git diff --cached --quiet; then
             echo "No changes to commit."
+          else
+            git commit -m "Update generated plots [skip ci]"
+            git push
           fi
-
-      - name: No new forecast — skipping build
-        if: steps.probe.outputs.has_new != 'true'
-        run: echo "NBM dataset unchanged; skipping plot build and commit."
