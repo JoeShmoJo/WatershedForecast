@@ -2,19 +2,18 @@ name: Build and publish plots
 
 on:
   schedule:
-    # NBM cycles: 00Z, 06Z, 12Z, 18Z. Early (~+75m) and late (~+165m).
-    - cron: "15 1 * * *"   # 00Z early
-    - cron: "45 2 * * *"   # 00Z late
-    - cron: "15 7 * * *"   # 06Z early
-    - cron: "45 8 * * *"   # 06Z late
-    - cron: "15 13 * * *"  # 12Z early
-    - cron: "45 14 * * *"  # 12Z late
-    - cron: "15 19 * * *"  # 18Z early
-    - cron: "45 20 * * *"  # 18Z late
+    - cron: "15 1 * * *"
+    - cron: "45 2 * * *"
+    - cron: "15 7 * * *"
+    - cron: "45 8 * * *"
+    - cron: "15 13 * * *"
+    - cron: "45 14 * * *"
+    - cron: "15 19 * * *"
+    - cron: "45 20 * * *"
   workflow_dispatch: {}
 
 permissions:
-  contents: write   # allow committing artifacts back to the repo (optional)
+  contents: write
 
 concurrency:
   group: build-plots
@@ -22,13 +21,11 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.11"
-  # Adjust to your script path. If your script lives at repo root, set to "WatershedForecast.py"
   SCRIPT_PATH: "MyApps/WatershedForecast/WatershedForecast.py"
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,14 +37,12 @@ jobs:
           echo "Branch: $GITHUB_REF_NAME"
           echo "Commit: $GITHUB_SHA"
           echo "Repo root (pwd): $(pwd)"
-          echo "--- top-level listing ---"
-          ls -la
+          echo "--- top-level listing ---"; ls -la
           echo "--- find likely dependency files ---"
           find . -maxdepth 3 -type f \( -iname "requirements*.txt" -o -iname "pyproject.toml" \) -print || true
           echo "--- show workflow file ---"
           ls -la .github/workflows || true
 
-      # Optional: needed by rtree if you install it
       - name: Install system packages needed by rtree (optional)
         run: |
           sudo apt-get update
@@ -63,7 +58,6 @@ jobs:
             MyApps/WatershedForecast/requirements.txt
             **/pyproject.toml
 
-      # Use a safe shell step instead of third-party installers so we can tolerate missing files
       - name: Install dependencies (if present, else fallback)
         shell: bash
         run: |
@@ -86,7 +80,6 @@ jobs:
         run: |
           python "${{ env.SCRIPT_PATH }}"
 
-      # If your script writes PNGs/HTML into known folders, upload them as artifacts
       - name: Upload plots (artifacts)
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,13 +90,11 @@ jobs:
             **/*.html
           if-no-files-found: ignore
 
-      # Optional: commit generated outputs (e.g., docs/ or images/) back to the branch
       - name: Commit & push generated outputs (optional)
         if: ${{ github.event_name != 'pull_request' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Add paths you actually want committed (adjust as needed)
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit."
