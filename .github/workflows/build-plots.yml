@@ -2,14 +2,15 @@ name: Build and publish plots
 
 on:
   schedule:
-    - cron: "15 1 * * *"
-    - cron: "45 2 * * *"
-    - cron: "15 7 * * *"
-    - cron: "45 8 * * *"
-    - cron: "15 13 * * *"
-    - cron: "45 14 * * *"
-    - cron: "15 19 * * *"
-    - cron: "45 20 * * *"
+    # NBM cycles: 00Z, 06Z, 12Z, 18Z. Early (~+75m) and late (~+165m).
+    - cron: "15 1 * * *"   # 00Z early
+    - cron: "45 2 * * *"   # 00Z late
+    - cron: "15 7 * * *"   # 06Z early
+    - cron: "45 8 * * *"   # 06Z late
+    - cron: "15 13 * * *"  # 12Z early
+    - cron: "45 14 * * *"  # 12Z late
+    - cron: "15 19 * * *"  # 18Z early
+    - cron: "45 20 * * *"  # 18Z late
   workflow_dispatch: {}
 
 permissions:
@@ -21,29 +22,32 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.11"
+  # If your script is at repo root, change to "WatershedForecast.py"
   SCRIPT_PATH: "MyApps/WatershedForecast/WatershedForecast.py"
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Debug workspace (what files do we have?)
+      - name: Show ref/branch and list files
         run: |
-          echo "Branch: $GITHUB_REF_NAME"
-          echo "Commit: $GITHUB_SHA"
-          echo "Repo root (pwd): $(pwd)"
-          echo "--- top-level listing ---"; ls -la
-          echo "--- find likely dependency files ---"
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
+          git rev-parse --abbrev-ref HEAD || true
+          git show -s --format='%H %D' HEAD || true
+          echo "--- top-level ---"
+          ls -la
+          echo "--- possible deps files ---"
           find . -maxdepth 3 -type f \( -iname "requirements*.txt" -o -iname "pyproject.toml" \) -print || true
-          echo "--- show workflow file ---"
-          ls -la .github/workflows || true
 
-      - name: Install system packages needed by rtree (optional)
+      # Remove if you don't use rtree
+      - name: Install system packages for rtree (optional)
         run: |
           sudo apt-get update
           sudo apt-get install -y libspatialindex-dev
@@ -52,11 +56,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            MyApps/WatershedForecast/requirements.txt
-            **/pyproject.toml
 
       - name: Install dependencies (if present, else fallback)
         shell: bash
