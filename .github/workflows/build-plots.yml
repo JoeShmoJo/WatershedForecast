@@ -23,7 +23,7 @@ concurrency:
 env:
   PYTHON_VERSION: "3.11"
   # If your script is at repo root, change to "WatershedForecast.py"
-  SCRIPT_PATH: "MyApps/WatershedForecast/WatershedForecast.py"
+  SCRIPT_PATH: "WatershedForecast.py"
 
 jobs:
   build:
