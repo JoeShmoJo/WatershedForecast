@@ -77,7 +77,7 @@ jobs:
 
       - name: Run forecast script
         run: |
-          python "${{ env.SCRIPT_PATH }}"
+          python "${{ env.SCRIPT_PATH }}" --all --workers 4
 
       - name: Upload plots (artifacts)
         if: always()
