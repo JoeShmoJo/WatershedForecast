@@ -192,6 +192,7 @@ def build_index_html(root: Path, title: str) -> str:
   <h1>Watershed Forecast Plots</h1>
   <p class="topnote">National Blend of Models <a href="https://vlab.noaa.gov/web/mdl/nbm" target="_blank" rel="noopener">NBM Info</a> basin precipitation forecast and USGS streamflow summaries.</p>
   <p class="topnote">Precipitation grids cut to basin. Forecasts updated every ~6 hours.</p>
+  <p class="topnote"> TURN YOUR PHONE SIDEWAYS </p>
 """
 
     body = []

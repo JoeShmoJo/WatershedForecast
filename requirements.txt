@@ -1,0 +1,13 @@
+numpy
+pandas
+xarray
+netCDF4
+pydap
+requests
+matplotlib
+plotly
+kaleido
+geopandas
+shapely
+pyproj
+rtree
