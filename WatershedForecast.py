@@ -471,7 +471,7 @@ def plot_cumulative_map(basin: Polygon,
     minx, miny, maxx, maxy = basin.bounds
     extent = (float(minx), float(maxx), float(miny), float(maxy))
 
-    # Colors
+    # Colors (discrete WPC-style bins)
     cmap, norm, levels = wpc_qpf_colormap_extended()
 
     fig, ax = plt.subplots(figsize=(11, 7))
@@ -494,8 +494,8 @@ def plot_cumulative_map(basin: Polygon,
                 ax=ax, zorder=3, color="#111", linewidth=1.2
             )
             try:
-                cx, cy = geom.centroid.x, geom.centroid.y
-                ax.text(cx, cy, name.replace("_", " "),
+                rp = geom.representative_point()
+                ax.text(float(rp.x), float(rp.y), name.replace("_", " "),
                         fontsize=9, ha="center", va="center",
                         color="#111",
                         bbox=dict(facecolor="white", edgecolor="none", alpha=0.65, pad=1.0),
@@ -530,6 +530,7 @@ def plot_cumulative_map(basin: Polygon,
         fig.savefig(f"{save_basepath}.svg",           bbox_inches="tight")
     plt.close(fig)
 
+
 def plot_cumulative_map_plotly_then_fallback(
     basin: Polygon,
     lat_f: np.ndarray,
@@ -545,9 +546,10 @@ def plot_cumulative_map_plotly_then_fallback(
 ):
     """
     Plotly heatmap (PNG/SVG via kaleido)
-      - Green→Blue→Purple→Red gradient
-      - 1-inch legend tick marks
+      - DISCRETE NWS/WPC-style colors (hard steps)
+      - 1-inch legend tick marks (0..max_daily_in)
       - Sub-basin outlines + labels
+    Falls back to Matplotlib on error or if save_basepath is None.
     """
     if save_basepath is None:
         return plot_cumulative_map(
@@ -557,7 +559,7 @@ def plot_cumulative_map_plotly_then_fallback(
     # ------------------------------------------------------------------
     def _segments_from_geom(g) -> list[tuple[list[float], list[float]]]:
         from shapely.geometry import Polygon as SPoly, MultiPolygon as SMulti
-        segs = []
+        segs: list[tuple[list[float], list[float]]] = []
         try:
             if isinstance(g, SPoly):
                 x, y = g.exterior.xy
@@ -576,40 +578,62 @@ def plot_cumulative_map_plotly_then_fallback(
             pass
         return segs
 
-    def _gradient_colorscale(max_in: float) -> list[list]:
+    def _discrete_nws_colorscale(max_in: float = 6.0) -> tuple[list[float], list[list]]:
         """
-        Green → Blue → Purple → Red smooth gradient.
-        Anchored to 0–max_in (default 6").
+        Return (levels, colorscale) matching NWS/WPC-style discrete bins up to max_in inches.
+        Each bin [L_i, L_{i+1}) uses a single color (hard steps in Plotly).
         """
-        return [
-            [0.00, "#00cc44"],  # green
-            [0.25, "#0099ff"],  # blue
-            [0.55, "#9933ff"],  # purple
-            [0.80, "#ff0066"],  # magenta-red
-            [1.00, "#ff3300"],  # deep red
+        # Canonical WPC breakpoints (trimmed/capped to max_in)
+        levels = [0, 0.01, 0.10, 0.25, 0.50, 1, 1.5, 2, 3, 4, 5, 6]
+        colors = [
+            "#ffffff",  # 0–0.01  (white / no precip)
+            "#e6ffe6",  # 0.01–0.10 very light green
+            "#b3ffb3",  # 0.10–0.25 light green
+            "#66ff66",  # 0.25–0.50 medium green
+            "#ffff66",  # 0.50–1 yellow
+            "#ffcc66",  # 1–1.5 light orange
+            "#ff9933",  # 1.5–2 orange
+            "#ff3300",  # 2–3 red-orange
+            "#cc0000",  # 3–4 deep red
+            "#990099",  # 4–5 purple
+            "#660099",  # 5–6 deep purple
         ]
+        # Cap/trim to max_in
+        levels = [lv for lv in levels if lv <= max_in]
+        colors = colors[: max(1, len(levels) - 1)]
+        # Build stepped colorscale (duplicate stops for hard edges)
+        lmin, lmax = levels[0], levels[-1]
+        rng = max(lmax - lmin, 1e-9)
+        colorscale: list[list] = []
+        for i in range(len(levels) - 1):
+            a = (levels[i] - lmin) / rng
+            b = (levels[i + 1] - lmin) / rng
+            colorscale.append([a, colors[i]])
+            colorscale.append([b, colors[i]])
+        colorscale.append([1.0, colors[-1]])
+        return levels, colorscale
 
     # ------------------------------------------------------------------
     try:
         import plotly.graph_objs as go
         from plotly import io as pio
-        _ = pio.kaleido
+        _ = pio.kaleido  # ensure kaleido is available
 
-        # --- scale setup ---
-        lmin, lmax = 0.0, max_daily_in
+        # --- scale setup (discrete) ---
+        levels, colorscale = _discrete_nws_colorscale(max_in=max_daily_in)
+        lmin, lmax = levels[0], levels[-1]
+
+        # clamp data to top bin so big values don't stretch the scale
         Z = np.where(mask, np.clip(fine_cum, lmin, lmax), np.nan)
 
-        # Convert to lists to avoid array('d') issue
+        # Convert to lists to avoid array('d') issues
         lon_list = np.asarray(lon_f).tolist()
         lat_list = np.asarray(lat_f).tolist()
         Z_list   = np.asarray(Z).tolist()
 
-        colorscale = _gradient_colorscale(lmax)
-        levels = np.arange(0, lmax + 1, 1.0)  # 1-inch ticks
-
         fig = go.Figure()
 
-        # --- Heatmap ---
+        # --- Heatmap (discrete steps) ---
         fig.add_trace(go.Heatmap(
             x=lon_list,
             y=lat_list,
@@ -617,10 +641,11 @@ def plot_cumulative_map_plotly_then_fallback(
             colorscale=colorscale,
             zmin=lmin,
             zmax=lmax,
+            zsmooth=False,  # keep bin edges crisp
             colorbar=dict(
                 title="in",
-                tickvals=levels.tolist(),
-                ticktext=[f"{lv:g}" for lv in levels],
+                tickvals=[lv for lv in range(int(lmin), int(lmax) + 1)],  # 1-inch ticks
+                ticktext=[f"{lv:g}" for lv in range(int(lmin), int(lmax) + 1)],
                 len=0.85,
             ),
             hovertemplate="Lon %{x:.3f}, Lat %{y:.3f}<br>%{z:.2f} in<extra></extra>",
@@ -644,7 +669,7 @@ def plot_cumulative_map_plotly_then_fallback(
                 hoverinfo="skip", showlegend=False,
             ))
 
-        # --- Sub-basin annotations ---
+        # --- Sub-basin annotations (representative points) ---
         annos = []
         if subbasin_outlines:
             for name, geom in subbasin_outlines.items():
