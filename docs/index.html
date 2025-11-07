@@ -4,165 +4,192 @@
   <meta charset="utf-8" />
   <title>Watershed Forecast Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <style>
-      body { font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #222; background: #fdfdfd; }
-      h1 { text-align: center; margin-bottom: 10px; }
-      h2 { margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 6px; }
-      .basin { margin-bottom: 48px; }
-      .plots { display: flex; flex-wrap: wrap; gap: 20px; justify-content: space-around; }
-      .plots img { max-width: 550px; width: 100%; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-      .plots div { flex: 1 1 500px; text-align: center; }
-      .plots h3 { font-weight: 500; color: #444; }
-      footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: #666; }
+    :root { --gap: 20px; --card-bg: #fff; --muted: #666; }
+    body { font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #222; background: #fdfdfd; }
+    h1 { text-align: center; margin-bottom: 10px; }
+    h2 { margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 6px; }
+    .basin { margin-bottom: 48px; }
+    .plots { display: flex; flex-wrap: wrap; gap: var(--gap); justify-content: space-around; }
+    .card { flex: 1 1 420px; background: var(--card-bg); border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); padding: 12px; text-align: center; }
+    .card h3 { font-weight: 600; color: #444; margin: 8px 0 12px; font-size: 1.05rem; }
+    .card img { max-width: 560px; width: 100%; border: 1px solid #e6e6e6; border-radius: 4px; }
+    .iframe-wrap { width: 100%; max-width: 560px; margin: 0 auto; }
+    .iframe-wrap iframe { width: 100%; height: 520px; border: 0; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .placeholder { display: grid; place-items: center; height: 520px; border: 2px dashed #cfcfcf; border-radius: 6px; color: var(--muted);
+                   background: repeating-linear-gradient(45deg, #fafafa, #fafafa 10px, #f6f6f6 10px, #f6f6f6 20px); }
+    .placeholder span { font-size: 0.95rem; }
+    .linkrow { margin-top: 8px; }
+    .linkrow a { color: #0b5fd7; text-decoration: none; }
+    .linkrow a:hover { text-decoration: underline; }
+    .topnote { text-align:center; }
+    footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: var(--muted); }
+    @media (max-width: 600px) { body { margin: 12px; } }
   </style>
+
 </head>
 <body>
   <h1>Watershed Forecast Plots</h1>
-  <p style="text-align:center;">National Blend of Models <a href="https://vlab.noaa.gov/web/mdl/nbm" target="_blank">NBM Info</a> basin precipitation forecast and USGS streamflow summaries.</p>
-  <p style="text-align:center;">Precipitation grids cut to basin. Forecasts updated every ~6 hours.</p>
+  <p class="topnote">National Blend of Models <a href="https://vlab.noaa.gov/web/mdl/nbm" target="_blank" rel="noopener">NBM Info</a> basin precipitation forecast and USGS streamflow summaries.</p>
+  <p class="topnote">Precipitation grids cut to basin. Forecasts updated every ~6 hours.</p>
 
-  <!-- Basin: Canyon Creek -->
   <div class="basin">
     <h2>Canyon_Creek_WA</h2>
     <div class="plots">
-      <div>
-        <h3>Cumulative Map (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Canyon_Creek_WA/cumulative_map_latest.svg" type="image/svg+xml" />
-          <img src="assets/Canyon_Creek_WA/cumulative_map_latest.png" alt="Cumulative Map for Canyon_Creek_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/Canyon_Creek_WA/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Canyon_Creek_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/Canyon_Creek_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
-      <div>
-        <h3>Hourly and Cumulative Series (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Canyon_Creek_WA/hourly_series_latest.svg" type="image/svg+xml" />
-          <img src="assets/Canyon_Creek_WA/hourly_series_latest.png" alt="Hourly and Cumulative Series for Canyon_Creek_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Canyon_Creek_WA/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Canyon_Creek_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <picture>
-          <source srcset="assets/Canyon_Creek_WA/usgs_flow_latest.svg" type="image/svg+xml" />
-          <img src="assets/Canyon_Creek_WA/usgs_flow_latest.png" alt="USGS Streamflow (last 24h) for Canyon_Creek_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Canyon_Creek_WA/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Canyon_Creek_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
-  <!-- Basin: Hagen_abv_WF_Shoug -->
+
   <div class="basin">
-    <h2>Hagen_abv_WF_Shoug_WA</h2>
+    <h2>Washougal_at_Hathaway_WA</h2>
     <div class="plots">
-      <div>
-        <h3>Cumulative Map (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Hagen_abv_WF_Shoug_WA/cumulative_map_latest.svg" type="image/svg+xml" />
-          <img src="assets/Hagen_abv_WF_Shoug_WA/cumulative_map_latest.png" alt="Cumulative Map for Hagen_abv_WF_Shoug_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/Washougal_at_Hathaway_WA/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Washougal_at_Hathaway_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/Washougal_at_Hathaway_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
-      <div>
-        <h3>Hourly and Cumulative Series (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Hagen_abv_WF_Shoug_WA/hourly_series_latest.svg" type="image/svg+xml" />
-          <img src="assets/Hagen_abv_WF_Shoug_WA/hourly_series_latest.png" alt="Hourly and Cumulative Series for Hagen_abv_WF_Shoug_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Washougal_at_Hathaway_WA/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Washougal_at_Hathaway_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <picture>
-          <source srcset="assets/Hagen_abv_WF_Shoug_WA/usgs_flow_latest.svg" type="image/svg+xml" />
-          <img src="assets/Hagen_abv_WF_Shoug_WA/usgs_flow_latest.png" alt="USGS Streamflow (last 24h) for Hagen_abv_WF_Shoug_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Washougal_at_Hathaway_WA/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Washougal_at_Hathaway_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
-  <!-- Basin: Little White Salmon -->
+
   <div class="basin">
     <h2>Little_White_Salmon_at_Hatchery_WA</h2>
     <div class="plots">
-      <div>
-        <h3>Cumulative Map (future 24)</h3>
-        <picture>
-          <source srcset="assets/Little_White_Salmon_at_Hatchery_WA/cumulative_map_latest.svg" type="image/svg+xml" />
-          <img src="assets/Little_White_Salmon_at_Hatchery_WA/cumulative_map_latest.png" alt="Cumulative Map for Little_White_Salmon_at_Hatchery_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/Little_White_Salmon_at_Hatchery_WA/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Little_White_Salmon_at_Hatchery_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/Little_White_Salmon_at_Hatchery_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
-      <div>
-        <h3>Hourly and Cumulative Series (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Little_White_Salmon_at_Hatchery_WA/hourly_series_latest.svg" type="image/svg+xml" />
-          <img src="assets/Little_White_Salmon_at_Hatchery_WA/hourly_series_latest.png" alt="Hourly and Cumulative Series for Little_White_Salmon_at_Hatchery_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Little_White_Salmon_at_Hatchery_WA/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Little_White_Salmon_at_Hatchery_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <picture>
-          <source srcset="assets/Little_White_Salmon_at_Hatchery_WA/usgs_flow_latest.svg" type="image/svg+xml" />
-          <img src="assets/Little_White_Salmon_at_Hatchery_WA/usgs_flow_latest.png" alt="USGS Streamflow (last 24h) for Little_White_Salmon_at_Hatchery_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Little_White_Salmon_at_Hatchery_WA/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Little_White_Salmon_at_Hatchery_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
-  <!-- Basin: White Salmon -->
+
   <div class="basin">
     <h2>White_Salmon_at_Husum_WA</h2>
     <div class="plots">
-      <div>
-        <h3>Cumulative Map (future 24h)</h3>
-        <picture>
-          <source srcset="assets/White_Salmon_at_Husum_WA/cumulative_map_latest.svg" type="image/svg+xml" />
-          <img src="assets/White_Salmon_at_Husum_WA/cumulative_map_latest.png" alt="Cumulative Map for White_Salmon_at_Husum_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/White_Salmon_at_Husum_WA/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/White_Salmon_at_Husum_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/White_Salmon_at_Husum_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
-      <div>
-        <h3>Hourly and Cumulative Series (future 24h)</h3>
-        <picture>
-          <source srcset="assets/White_Salmon_at_Husum_WA/hourly_series_latest.svg" type="image/svg+xml" />
-          <img src="assets/White_Salmon_at_Husum_WA/hourly_series_latest.png" alt="Hourly and Cumulative Series for White_Salmon_at_Husum_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/White_Salmon_at_Husum_WA/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/White_Salmon_at_Husum_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <picture>
-          <source srcset="assets/White_Salmon_at_Husum_WA/usgs_flow_latest.svg" type="image/svg+xml" />
-          <img src="assets/White_Salmon_at_Husum_WA/usgs_flow_latest.png" alt="USGS Streamflow (last 24h) for White_Salmon_at_Husum_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/White_Salmon_at_Husum_WA/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/White_Salmon_at_Husum_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
-  <!-- Basin: Wind River -->
+
   <div class="basin">
     <h2>Wind_River_at_Carson_WA</h2>
     <div class="plots">
-      <div>
-        <h3>Cumulative Map (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Wind_River_at_Carson_WA/cumulative_map_latest.svg" type="image/svg+xml" />
-          <img src="assets/Wind_River_at_Carson_WA/cumulative_map_latest.png" alt="Cumulative Map for Wind_River_at_Carson_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/Wind_River_at_Carson_WA/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Wind_River_at_Carson_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/Wind_River_at_Carson_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
-      <div>
-        <h3>Hourly and Cumulative Series (future 24h)</h3>
-        <picture>
-          <source srcset="assets/Wind_River_at_Carson_WA/hourly_series_latest.svg" type="image/svg+xml" />
-          <img src="assets/Wind_River_at_Carson_WA/hourly_series_latest.png" alt="Hourly and Cumulative Series for Wind_River_at_Carson_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Wind_River_at_Carson_WA/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Wind_River_at_Carson_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
-      <div>
-        <h3>USGS Streamflow (last 24h)</h3>
-        <picture>
-          <source srcset="assets/Wind_River_at_Carson_WA/usgs_flow_latest.svg" type="image/svg+xml" />
-          <img src="assets/Wind_River_at_Carson_WA/usgs_flow_latest.png" alt="USGS Streamflow (last 24h) for Wind_River_at_Carson_WA" />
-        </picture>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Wind_River_at_Carson_WA/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Wind_River_at_Carson_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>Generated from <code>WatershedForecast.py</code> — updated automatically.</p>
+    <p>Generated by <code>write_index.py</code> — 2025-11-06 22:28 PST</p>
   </footer>
 </body>
 </html>

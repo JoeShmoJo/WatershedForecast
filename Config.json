@@ -3,33 +3,126 @@
     "state": "WA",
     "latitude": 45.9404,
     "longitude": -122.3226,
-    "USGS_id": "14219000",
-    "USGS_location": "Canyon Creek Near Amboy, WA"
+    "gages": [
+      {
+        "name": "Canyon Creek Near Amboy, WA",
+        "state": "WA",
+        "latitude": 45.9404,
+        "longitude": -122.3226,
+        "service": "USGS",
+        "site_id": "14219000",
+        "type": "FLOW"
+      }
+    ]
   },
-  "Hagen_abv_WF_Shoug_WA": {
+
+  "Washougal_at_Hathaway_WA": {
     "state": "WA",
-    "latitude": 45.6842,
-    "longitude": -122.2433,
-    "USGS_id": "14143500",
-    "USGS_location": "Washougal River Near Washougal, WA"
+    "latitude": 45.58463,
+    "longitude": -122.34090,
+    "gages": [
+      {
+        "name": "Washougal River Near Washougal, WA",
+        "state": "WA",
+        "latitude": 45.58463,
+        "longitude": -122.34090,
+        "service": "USGS",
+        "site_id": "14143500",
+        "type": "FLOW"
+      },
+      {
+        "name": "Washougal River @ Hathaway Park (WA Ecology)",
+        "state": "WA",
+        "latitude": 45.58463,
+        "longitude": -122.34090,
+        "service": "WA_Ecology",
+        "site_id": "28B080",
+        "type": "FLOW"
+      }
+    ],
+    "subbasins": {
+      "Hagen_Creek": {
+        "state": "WA",
+        "latitude": 45.68464,
+        "longitude": -122.24344,
+        "gages": []
+      },
+      "West_Fork_Shoug": {
+        "state": "WA",
+        "latitude": 45.61335,
+        "longitude": -122.21936,
+        "gages": []
+      },
+      "Stebbins_Creek": {
+        "state": "WA",
+        "latitude": 45.69113,
+        "longitude": -122.12143,
+        "gages": []
+      }
+    }
   },
+
   "Little_White_Salmon_at_Hatchery_WA": {
     "state": "WA",
     "latitude": 45.7672,
-    "longitude": -121.6300
+    "longitude": -121.6300,
+    "gages": []
   },
+
   "White_Salmon_at_Husum_WA": {
     "state": "WA",
     "latitude": 45.7978,
     "longitude": -121.4862,
-    "USGS_id": "14123500",
-    "USGS_location": "White Salmon River Near Underwood, WA"
+    "gages": [
+      {
+        "name": "White Salmon River Near Underwood, WA",
+        "state": "WA",
+        "latitude": 45.7978,
+        "longitude": -121.4862,
+        "service": "USGS",
+        "site_id": "14123500",
+        "type": "FLOW"
+      }
+    ]
   },
-    "Wind_River_at_Carson_WA": {
+
+  "Wind_River_at_Carson_WA": {
     "state": "WA",
     "latitude": 45.72657,
     "longitude": -121.79428,
-    "USGS_id": "14128500",
-    "USGS_location": "Wind River at Carson, WA"
+    "gages": [
+      {
+        "name": "Wind River at Carson, WA",
+        "state": "WA",
+        "latitude": 45.72657,
+        "longitude": -121.79428,
+        "service": "USGS",
+        "site_id": "14128500",
+        "type": "FLOW"
+      },
+      {
+        "name": "Wind River at Stabler, WA",
+        "state": "WA",
+        "latitude": 45.72657,
+        "longitude": -121.79428,
+        "service": "WA_Ecology",
+        "site_id": "29C100",
+        "type": "FLOW"
+      }
+    ],
+    "subbasins": {
+      "Trout_Creek": {
+        "state": "WA",
+        "latitude": 45.79853,
+        "longitude": -121.90676,
+        "gages": []
+      },
+      "Panther_Creek": {
+        "state": "WA",
+        "latitude": 45.76140,
+        "longitude": -121.83134,
+        "gages": []
+      }
+    }
   }
 }
