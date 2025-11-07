@@ -258,11 +258,48 @@ def ensure_ascending(lat_vals, lon_vals, grid3d):
 
 
 def open_nbm_subset(opendap_url: str, basin: Polygon, hours: int) -> Tuple[xr.DataArray, Tuple[float, float, float, float]]:
+    """
+    Try netCDF4 backend first (fast, if present). Fall back to pydap on CI.
+    You can force a backend via env: NBM_BACKEND=netcdf4|pydap
+    """
+    backend = os.environ.get("NBM_BACKEND", "").strip().lower()
+    last_exc = None
+
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=SerializationWarning)
-        ds = xr.open_dataset(opendap_url, engine="netcdf4", cache=False)
+
+        # helper to open with a given engine
+        def _open(engine: str):
+            if engine == "netcdf4":
+                return xr.open_dataset(opendap_url, engine="netcdf4", cache=False)
+            if engine == "pydap":
+                return xr.open_dataset(opendap_url, engine="pydap", backend_kwargs={"timeout": 60})
+            raise ValueError(f"Unsupported backend {engine!r}")
+
+        # Honor explicit env first
+        if backend in {"netcdf4", "pydap"}:
+            try:
+                ds = _open(backend)
+            except Exception as e:
+                raise RuntimeError(f"Failed to open NBM via {backend}: {e}") from e
+        else:
+            # Auto-detect: try netcdf4, then pydap
+            for eng in ("netcdf4", "pydap"):
+                try:
+                    ds = _open(eng)
+                    break
+                except Exception as e:
+                    last_exc = e
+                    ds = None
+            if ds is None:
+                raise RuntimeError(
+                    "Could not open NBM via netcdf4 or pydap. "
+                    "Install netCDF4 or pydap (CI usually uses pydap)."
+                ) from last_exc
+
     minx, miny, maxx, maxy = basin.bounds
     pad = 0.05
+    # slice, load, close
     lat_slice = coord_slice(ds["lat"].values, miny - pad, maxy + pad)
     lon_slice = coord_slice(ds["lon"].values, minx - pad, maxx + pad)
     qpf = ds["apcpsfc"].sel(lat=lat_slice, lon=lon_slice).isel(time=slice(0, hours)).load()
