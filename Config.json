@@ -5,7 +5,7 @@
     "longitude": -121.79428,
     "gages": [
       {
-        "name": "Wind at Carson",
+        "name": "Carson",
         "state": "WA",
         "latitude": 45.72657,
         "longitude": -121.79428,
@@ -14,7 +14,7 @@
         "type": "FLOW"
       },
       {
-        "name": "Wind at Stabler",
+        "name": "Stabler",
         "state": "WA",
         "latitude": 45.72657,
         "longitude": -121.79428,
