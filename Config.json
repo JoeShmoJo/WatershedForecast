@@ -1,98 +1,11 @@
 {
-  "Canyon_Creek_WA": {
-    "state": "WA",
-    "latitude": 45.9404,
-    "longitude": -122.3226,
-    "gages": [
-      {
-        "name": "Canyon Creek Near Amboy, WA",
-        "state": "WA",
-        "latitude": 45.9404,
-        "longitude": -122.3226,
-        "service": "USGS",
-        "site_id": "14219000",
-        "type": "FLOW"
-      }
-    ]
-  },
-
-  "Washougal_at_Hathaway_WA": {
-    "state": "WA",
-    "latitude": 45.58463,
-    "longitude": -122.34090,
-    "gages": [
-      {
-        "name": "Washougal River Near Washougal, WA",
-        "state": "WA",
-        "latitude": 45.58463,
-        "longitude": -122.34090,
-        "service": "USGS",
-        "site_id": "14143500",
-        "type": "FLOW"
-      },
-      {
-        "name": "Washougal River @ Hathaway Park (WA Ecology)",
-        "state": "WA",
-        "latitude": 45.58463,
-        "longitude": -122.34090,
-        "service": "WA_Ecology",
-        "site_id": "28B080",
-        "type": "FLOW"
-      }
-    ],
-    "subbasins": {
-      "Hagen_Creek": {
-        "state": "WA",
-        "latitude": 45.68464,
-        "longitude": -122.24344,
-        "gages": []
-      },
-      "West_Fork_Shoug": {
-        "state": "WA",
-        "latitude": 45.61335,
-        "longitude": -122.21936,
-        "gages": []
-      },
-      "Stebbins_Creek": {
-        "state": "WA",
-        "latitude": 45.69113,
-        "longitude": -122.12143,
-        "gages": []
-      }
-    }
-  },
-
-  "Little_White_Salmon_at_Hatchery_WA": {
-    "state": "WA",
-    "latitude": 45.7672,
-    "longitude": -121.6300,
-    "gages": []
-  },
-
-  "White_Salmon_at_Husum_WA": {
-    "state": "WA",
-    "latitude": 45.7978,
-    "longitude": -121.4862,
-    "gages": [
-      {
-        "name": "White Salmon River Near Underwood, WA",
-        "state": "WA",
-        "latitude": 45.7978,
-        "longitude": -121.4862,
-        "service": "USGS",
-        "site_id": "14123500",
-        "type": "FLOW"
-      }
-    ]
-  },
-
-  "Wind_River_at_Carson_WA": {
+    "Wind_at_Carson": {
     "state": "WA",
     "latitude": 45.72657,
     "longitude": -121.79428,
     "gages": [
       {
-        "name": "Wind River at Carson, WA",
+        "name": "Wind at Carson",
         "state": "WA",
         "latitude": 45.72657,
         "longitude": -121.79428,
@@ -101,7 +14,7 @@
         "type": "FLOW"
       },
       {
-        "name": "Wind River at Stabler, WA",
+        "name": "Wind at Stabler",
         "state": "WA",
         "latitude": 45.72657,
         "longitude": -121.79428,
@@ -111,18 +24,105 @@
       }
     ],
     "subbasins": {
-      "Trout_Creek": {
+      "Trout": {
         "state": "WA",
         "latitude": 45.79853,
         "longitude": -121.90676,
         "gages": []
       },
-      "Panther_Creek": {
+      "Panther": {
         "state": "WA",
         "latitude": 45.76140,
         "longitude": -121.83134,
         "gages": []
       }
     }
+  },
+    "Shoug_at_Hathaway": {
+    "state": "WA",
+    "latitude": 45.58463,
+    "longitude": -122.34090,
+    "gages": [
+      {
+        "name": "Washougal",
+        "state": "WA",
+        "latitude": 45.58463,
+        "longitude": -122.34090,
+        "service": "USGS",
+        "site_id": "14143500",
+        "type": "FLOW"
+      },
+      {
+        "name": "Hathaway",
+        "state": "WA",
+        "latitude": 45.58463,
+        "longitude": -122.34090,
+        "service": "WA_Ecology",
+        "site_id": "28B080",
+        "type": "FLOW"
+      }
+    ],
+    "subbasins": {
+      "Hagen": {
+        "state": "WA",
+        "latitude": 45.68464,
+        "longitude": -122.24344,
+        "gages": []
+      },
+      "WF_Shoug": {
+        "state": "WA",
+        "latitude": 45.61335,
+        "longitude": -122.21936,
+        "gages": []
+      },
+      "Stebbins": {
+        "state": "WA",
+        "latitude": 45.69113,
+        "longitude": -122.12143,
+        "gages": []
+      }
+    }
+  },
+
+  "Canyon_Creek_WA": {
+    "state": "WA",
+    "latitude": 45.9404,
+    "longitude": -122.3226,
+    "gages": [
+      {
+        "name": "Amboy",
+        "state": "WA",
+        "latitude": 45.9404,
+        "longitude": -122.3226,
+        "service": "USGS",
+        "site_id": "14219000",
+        "type": "FLOW"
+      }
+    ]
+  },
+  "Ldub_at_Hatchery": {
+    "state": "WA",
+    "latitude": 45.7672,
+    "longitude": -121.6300,
+    "gages": []
+  },
+
+  "WS_at_Husum": {
+    "state": "WA",
+    "latitude": 45.7978,
+    "longitude": -121.4862,
+    "gages": [
+      {
+        "name": "Underwood",
+        "state": "WA",
+        "latitude": 45.7978,
+        "longitude": -121.4862,
+        "service": "USGS",
+        "site_id": "14123500",
+        "type": "FLOW"
+      }
+    ]
   }
+
+
 }

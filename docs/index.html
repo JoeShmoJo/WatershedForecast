@@ -25,6 +25,7 @@
     .linkrow a:hover { text-decoration: underline; }
     .topnote { text-align:center; }
     footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: var(--muted); }
+    .views { margin-top: 8px; }
     @media (max-width: 600px) { body { margin: 12px; } }
   </style>
 
@@ -34,6 +35,68 @@
   <p class="topnote">National Blend of Models <a href="https://vlab.noaa.gov/web/mdl/nbm" target="_blank" rel="noopener">NBM Info</a> basin precipitation forecast and USGS streamflow summaries.</p>
   <p class="topnote">Precipitation grids cut to basin. Forecasts updated every ~6 hours.</p>
   <p class="topnote"> TURN YOUR PHONE SIDEWAYS </p>
+
+  <div class="basin">
+    <h2>Wind_at_Carson</h2>
+    <div class="plots">
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/Wind_at_Carson/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Wind_at_Carson/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/Wind_at_Carson/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
+      </div>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Wind_at_Carson/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Wind_at_Carson/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+      </div>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Wind_at_Carson/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Wind_at_Carson/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="basin">
+    <h2>Shoug_at_Hathaway</h2>
+    <div class="plots">
+      
+      <div class="card">
+        <h3>Cumulative Map (next 24h)</h3>
+        <a href="assets/Shoug_at_Hathaway/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Shoug_at_Hathaway/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        </a>
+        <div class="linkrow"><a href="assets/Shoug_at_Hathaway/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
+      </div>
+      
+      <div class="card">
+        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Shoug_at_Hathaway/ts_precip_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Shoug_at_Hathaway/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+      </div>
+      
+      <div class="card">
+        <h3>Gage Data (last 24h)</h3>
+        <div class="iframe-wrap">
+          <iframe src="assets/Shoug_at_Hathaway/gage_latest.html" loading="lazy"></iframe>
+        </div>
+        <div class="linkrow"><a href="assets/Shoug_at_Hathaway/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+      </div>
+    </div>
+  </div>
+
 
   <div class="basin">
     <h2>Canyon_Creek_WA</h2>
@@ -67,131 +130,88 @@
 
 
   <div class="basin">
-    <h2>Washougal_at_Hathaway_WA</h2>
+    <h2>Ldub_at_Hatchery</h2>
     <div class="plots">
       
       <div class="card">
         <h3>Cumulative Map (next 24h)</h3>
-        <a href="assets/Washougal_at_Hathaway_WA/area_precip_latest.png" target="_blank" rel="noopener">
-          <img src="assets/Washougal_at_Hathaway_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        <a href="assets/Ldub_at_Hatchery/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/Ldub_at_Hatchery/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
         </a>
-        <div class="linkrow"><a href="assets/Washougal_at_Hathaway_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
+        <div class="linkrow"><a href="assets/Ldub_at_Hatchery/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
       
       <div class="card">
         <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
         <div class="iframe-wrap">
-          <iframe src="assets/Washougal_at_Hathaway_WA/ts_precip_latest.html" loading="lazy"></iframe>
+          <iframe src="assets/Ldub_at_Hatchery/ts_precip_latest.html" loading="lazy"></iframe>
         </div>
-        <div class="linkrow"><a href="assets/Washougal_at_Hathaway_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+        <div class="linkrow"><a href="assets/Ldub_at_Hatchery/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
       
       <div class="card">
         <h3>Gage Data (last 24h)</h3>
         <div class="iframe-wrap">
-          <iframe src="assets/Washougal_at_Hathaway_WA/gage_latest.html" loading="lazy"></iframe>
+          <iframe src="assets/Ldub_at_Hatchery/gage_latest.html" loading="lazy"></iframe>
         </div>
-        <div class="linkrow"><a href="assets/Washougal_at_Hathaway_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+        <div class="linkrow"><a href="assets/Ldub_at_Hatchery/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
 
   <div class="basin">
-    <h2>Little_White_Salmon_at_Hatchery_WA</h2>
+    <h2>WS_at_Husum</h2>
     <div class="plots">
       
       <div class="card">
         <h3>Cumulative Map (next 24h)</h3>
-        <a href="assets/Little_White_Salmon_at_Hatchery_WA/area_precip_latest.png" target="_blank" rel="noopener">
-          <img src="assets/Little_White_Salmon_at_Hatchery_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
+        <a href="assets/WS_at_Husum/area_precip_latest.png" target="_blank" rel="noopener">
+          <img src="assets/WS_at_Husum/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
         </a>
-        <div class="linkrow"><a href="assets/Little_White_Salmon_at_Hatchery_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
+        <div class="linkrow"><a href="assets/WS_at_Husum/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
       </div>
       
       <div class="card">
         <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
         <div class="iframe-wrap">
-          <iframe src="assets/Little_White_Salmon_at_Hatchery_WA/ts_precip_latest.html" loading="lazy"></iframe>
+          <iframe src="assets/WS_at_Husum/ts_precip_latest.html" loading="lazy"></iframe>
         </div>
-        <div class="linkrow"><a href="assets/Little_White_Salmon_at_Hatchery_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+        <div class="linkrow"><a href="assets/WS_at_Husum/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
       
       <div class="card">
         <h3>Gage Data (last 24h)</h3>
         <div class="iframe-wrap">
-          <iframe src="assets/Little_White_Salmon_at_Hatchery_WA/gage_latest.html" loading="lazy"></iframe>
+          <iframe src="assets/WS_at_Husum/gage_latest.html" loading="lazy"></iframe>
         </div>
-        <div class="linkrow"><a href="assets/Little_White_Salmon_at_Hatchery_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
-      </div>
-    </div>
-  </div>
-
-
-  <div class="basin">
-    <h2>White_Salmon_at_Husum_WA</h2>
-    <div class="plots">
-      
-      <div class="card">
-        <h3>Cumulative Map (next 24h)</h3>
-        <a href="assets/White_Salmon_at_Husum_WA/area_precip_latest.png" target="_blank" rel="noopener">
-          <img src="assets/White_Salmon_at_Husum_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
-        </a>
-        <div class="linkrow"><a href="assets/White_Salmon_at_Husum_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
-      </div>
-      
-      <div class="card">
-        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
-        <div class="iframe-wrap">
-          <iframe src="assets/White_Salmon_at_Husum_WA/ts_precip_latest.html" loading="lazy"></iframe>
-        </div>
-        <div class="linkrow"><a href="assets/White_Salmon_at_Husum_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
-      </div>
-      
-      <div class="card">
-        <h3>Gage Data (last 24h)</h3>
-        <div class="iframe-wrap">
-          <iframe src="assets/White_Salmon_at_Husum_WA/gage_latest.html" loading="lazy"></iframe>
-        </div>
-        <div class="linkrow"><a href="assets/White_Salmon_at_Husum_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
-      </div>
-    </div>
-  </div>
-
-
-  <div class="basin">
-    <h2>Wind_River_at_Carson_WA</h2>
-    <div class="plots">
-      
-      <div class="card">
-        <h3>Cumulative Map (next 24h)</h3>
-        <a href="assets/Wind_River_at_Carson_WA/area_precip_latest.png" target="_blank" rel="noopener">
-          <img src="assets/Wind_River_at_Carson_WA/area_precip_latest.png" alt="Cumulative Map (next 24h)" />
-        </a>
-        <div class="linkrow"><a href="assets/Wind_River_at_Carson_WA/area_precip_latest.png" target="_blank" rel="noopener">Open full size</a></div>
-      </div>
-      
-      <div class="card">
-        <h3>Hourly (grouped) + Cumulative (next 24h)</h3>
-        <div class="iframe-wrap">
-          <iframe src="assets/Wind_River_at_Carson_WA/ts_precip_latest.html" loading="lazy"></iframe>
-        </div>
-        <div class="linkrow"><a href="assets/Wind_River_at_Carson_WA/ts_precip_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
-      </div>
-      
-      <div class="card">
-        <h3>Gage Data (last 24h)</h3>
-        <div class="iframe-wrap">
-          <iframe src="assets/Wind_River_at_Carson_WA/gage_latest.html" loading="lazy"></iframe>
-        </div>
-        <div class="linkrow"><a href="assets/Wind_River_at_Carson_WA/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
+        <div class="linkrow"><a href="assets/WS_at_Husum/gage_latest.html" target="_blank" rel="noopener">Open interactive</a></div>
       </div>
     </div>
   </div>
 
   <footer>
-    <p>Generated by <code>write_index.py</code> — 2025-11-07 15:08 PST</p>
-    <p><img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fjoeshmojo.github.io%2FWatershedForecast%2F&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=views&edge_flat=false" alt="views" /></p>
+    <p>Generated by <code>write_index.py</code> — 2025-11-11 09:44 PST</p>
+    <p class="views">
+      <strong>Views:</strong> <span id="view-count">—</span>
+      <br/><img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fjoeshmojo.github.io%2FWatershedForecast%2F&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=views&edge_flat=false" alt="views badge" />
+    </p>
   </footer>
+
+  <script>
+    (async () => {
+      try {
+        const res = await fetch("https://api.countapi.xyz/hit/joeshmojo.github.io/WatershedForecast", {cache:"no-store"});
+        const data = await res.json();
+        const el = document.getElementById("view-count");
+        if (el && typeof data.value === "number") {
+          el.textContent = data.value.toLocaleString();
+        }
+      } catch (e) {
+        // leave placeholder if it fails
+      }
+    })();
+  </script>
+
 </body>
 </html>

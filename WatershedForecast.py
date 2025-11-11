@@ -729,12 +729,14 @@ def plot_cumulative_map_plotly_then_fallback(
             fig.update_layout(annotations=annos)
 
         # --- Layout ---
-        fig.update_layout(
-            title=title,
+        layout_kwargs = dict(
             xaxis_title="Longitude",
             yaxis_title="Latitude",
-            margin=dict(l=60, r=40, t=70, b=60),
+            margin=dict(l=60, r=40, t=20 if not title else 70, b=60),
         )
+        if title:
+            layout_kwargs["title"] = title
+        fig.update_layout(**layout_kwargs)
         fig.update_yaxes(scaleanchor="x", scaleratio=1)
 
         # --- Export ---
@@ -816,26 +818,26 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
             line=dict(color=color), marker=dict(color=color),
         ))
 
-    fig.update_layout(
-        title=title,
+    layout_kwargs = dict(
         # xaxis_title="Local time",
         yaxis_title="Precipitation (in)",
         barmode="group",
         legend=dict(
             title="Toggle series",
             groupclick="togglegroup",
-            orientation="v",        # vertical legend (stacked)
-            yanchor="top",          # align legend top with plot top
-            y=1,                    # top of legend
-            xanchor="left",         # attach legend’s left edge
-            x=1.02,                 # position just right of plot area
-            bgcolor="rgba(255,255,255,0.8)",  # optional: white semi-transparent background
-            bordercolor="rgba(0,0,0,0.2)",
-            borderwidth=1
+            orientation="v",
+            yanchor="top", y=1,
+            xanchor="left", x=1.02,
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="rgba(0,0,0,0.2)", borderwidth=1
         ),
         hovermode="x unified",
-        margin=dict(l=60, r=140, t=70, b=60),  # add extra right margin for legend
+        margin=dict(l=60, r=140, t=20 if not title else 70, b=60),
+        showlegend=True,  # <-- forces legend even for a single series
     )
+    if title:
+        layout_kwargs["title"] = title
+    fig.update_layout(**layout_kwargs)
 
     fig.update_xaxes(showgrid=True, tickformat="%m-%d\n%H:%M")
 
@@ -886,24 +888,24 @@ def plotly_ts_gages(gage_series: List[Tuple[str, pd.Series, str]], title: str, o
     else:
         ytitle = " / ".join(sorted(u for u in unit_set if u))
 
-    fig.update_layout(
-        title=title,
+    layout_kwargs = dict(
         # xaxis_title="Local time",
         yaxis_title=ytitle or "Value",
         hovermode="x unified",
-        margin=dict(l=60, r=140, t=70, b=60),  # add space on the right for legend
+        margin=dict(l=60, r=140, t=20 if not title else 70, b=60),
         legend=dict(
-            orientation="v",        # vertical stacking
-            yanchor="top",          # align top of legend with top of plot
-            y=1,                    # y position (1 = top)
-            xanchor="left",         # attach legend’s left edge
-            x=1.02,                 # just to the right of plot area
-            title="Toggle series",  # optional legend title
-            bgcolor="rgba(255,255,255,0.8)",  # semi-transparent background
-            bordercolor="rgba(0,0,0,0.2)",
-            borderwidth=1
+            orientation="v",
+            yanchor="top", y=1,
+            xanchor="left", x=1.02,
+            title="Toggle series",
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="rgba(0,0,0,0.2)", borderwidth=1
         ),
+        showlegend=True,  # <-- ensures legend shows for one series
     )
+    if title:
+        layout_kwargs["title"] = title
+    fig.update_layout(**layout_kwargs)
 
     fig.update_xaxes(showgrid=True, tickformat="%m-%d\n%H:%M")
     plotly_plot(fig, filename=outfile_html, auto_open=False, include_plotlyjs="inline")
@@ -1082,7 +1084,7 @@ def run_one(cfg: RunConfig,
     title_map = f"{cfg.name} — Basin cumulative precipitation (fine grid x{cfg.upscale_factor})"
     plot_cumulative_map_plotly_then_fallback(
         basin, lat_f, lon_f, dlat_f, dlon_f, mask, fine_cum_this,
-        title=title_map,
+    title=None,
         save_basepath=area_base,
         subbasin_outlines=sub_outlines if is_parent else None
     )
@@ -1100,7 +1102,7 @@ def run_one(cfg: RunConfig,
         if _PLOTLY_OK:
             title_ts = f"{cfg.name} — Hourly bars + Cumulative lines (parent + subbasins) — local time"
             plotly_ts_precip_multi(hourly_series_this, subs_hourly_map,
-                                   title=title_ts, outfile_html=ts_path, base_label="Parent")
+                                   title=None, outfile_html=ts_path, base_label="Basin")
         else:
             with open(ts_path, "w", encoding="utf-8") as f:
                 f.write("<html><body><h3>Plotly not available on this runner.</h3></body></html>")
@@ -1148,7 +1150,7 @@ def run_one(cfg: RunConfig,
 
         title_g = f"{cfg.name} — Gage time-series (local time)"
         if gage_series:
-            plotly_ts_gages(gage_series, title=title_g, outfile_html=gage_path)
+            plotly_ts_gages(gage_series, title=None, outfile_html=gage_path)
         else:
             with open(gage_path, "w", encoding="utf-8") as f:
                 f.write("<html><body><h3>No gage data configured or available.</h3></body></html>")
