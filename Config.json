@@ -102,9 +102,19 @@
   },
   "Ldub_at_Hatchery": {
     "state": "WA",
-    "latitude": 45.7672,
-    "longitude": -121.6300,
-    "gages": []
+    "latitude": 45.765300,
+    "longitude": -121.630594,
+    "gages": [
+            {
+        "name": "Hatchery",
+        "state": "WA",
+        "latitude": 45.630594,
+        "longitude": -122.630594,
+        "service": "NOAA",
+        "site_id": "LWWW1",
+        "type": "STAGE"
+      }
+    ]
   },
 
   "WS_at_Husum": {

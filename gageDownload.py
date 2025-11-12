@@ -9,6 +9,7 @@ Unified helpers for downloading gage time series from multiple services.
 Services:
 - USGS (instantaneous values / iv)
 - WA_Ecology (TXT tables per station/product)
+- NOAA (NWPS stage/flow JSON via api.water.noaa.gov)
 
 All functions return (series_UTC, metadata_dict)
 - `series_UTC`: pandas.Series with tz-aware UTC DatetimeIndex
@@ -16,9 +17,10 @@ All functions return (series_UTC, metadata_dict)
 
 Behavior:
 - USGS: parse timestamps (tz-aware from API), convert to UTC.
-- WA_Ecology: TXT tables are often labeled "PST" (UTC-8 year-round).
-  If header mentions "PST", we localize using fixed UTC-8 (no DST).
-  Otherwise we localize to America/Los_Angeles with robust DST disambiguation.
+- WA_Ecology: TXT tables often say "PST" => localize with fixed UTC-8 (no DST),
+  else America/Los_Angeles with DST disambiguation.
+- NOAA: uses NWPS stage/flow endpoints; we map to FLOW/STAGE and normalize units
+  (e.g., kcfs → cfs).
 """
 
 from __future__ import annotations
@@ -76,25 +78,14 @@ def _tz_to_utc_index(idx: pd.DatetimeIndex) -> pd.DatetimeIndex:
 
 
 # ----------------------------
-# Robust Pacific localization
+# Robust Pacific localization (WA Ecology)
 # ----------------------------
 
 def _localize_pacific_with_dst_disambiguation(naive_ts: pd.Series | pd.DatetimeIndex) -> pd.DatetimeIndex:
-    """
-    Localize naive Pacific times to America/Los_Angeles handling DST transitions.
-
-    Strategy:
-    - Try fast path with ambiguous='infer'.
-    - If AmbiguousTimeError (fall-back hour duplicated), mark first occurrence
-      of duplicated wall-times as DST=True, second as DST=False.
-    - Handle spring forward with nonexistent='shift_forward'.
-    """
-    # Convert to Series of naive timestamps if needed
     if isinstance(naive_ts, pd.DatetimeIndex):
         naive = pd.Series(naive_ts)
     else:
         naive = naive_ts.copy()
-
     try:
         idx = naive.dt.tz_localize(
             "America/Los_Angeles",
@@ -104,10 +95,9 @@ def _localize_pacific_with_dst_disambiguation(naive_ts: pd.Series | pd.DatetimeI
         return pd.DatetimeIndex(idx)
     except Exception:
         vals = pd.DatetimeIndex(naive)
-        # duplicates -> second occurrence of the same wall time
         second_occ = vals.duplicated(keep="first").to_numpy()
-        ambiguous_mask = np.ones(len(vals), dtype=bool)  # True => first occurrence (DST)
-        ambiguous_mask[second_occ] = False               # False => second occurrence (standard)
+        ambiguous_mask = np.ones(len(vals), dtype=bool)
+        ambiguous_mask[second_occ] = False
         idx = vals.tz_localize(
             "America/Los_Angeles",
             ambiguous=ambiguous_mask,
@@ -115,11 +105,8 @@ def _localize_pacific_with_dst_disambiguation(naive_ts: pd.Series | pd.DatetimeI
         )
         return pd.DatetimeIndex(idx)
 
-
 def _localize_fixed_pst(naive_idx: pd.DatetimeIndex) -> pd.DatetimeIndex:
-    """Localize naive timestamps to fixed UTC-8 (PST, no DST)."""
-    # pandas: 'Etc/GMT+8' means UTC-8 offset (note the sign convention)
-    return naive_idx.tz_localize("Etc/GMT+8")
+    return naive_idx.tz_localize("Etc/GMT+8")  # fixed UTC-8 (PST, no DST)
 
 
 # ----------------------------
@@ -135,16 +122,12 @@ def _download_usgs(site_id: str,
                    gtype: str,
                    hours: Optional[int],
                    name: Optional[str] = None) -> Tuple[pd.Series, Dict]:
-    """
-    Download USGS IV data for FLOW/STAGE. Returns UTC-indexed series.
-    """
     gtype_u = (gtype or "").upper()
     if gtype_u not in _USGS_PARAM_BY_TYPE:
         raise ValueError(f"USGS type must be FLOW or STAGE; got {gtype!r}")
 
     param_cd, units = _USGS_PARAM_BY_TYPE[gtype_u]
 
-    # Window in UTC (+ small buffer)
     end_utc = _now_utc()
     start_utc = end_utc - pd.Timedelta(hours=(hours or 24) + 2)
 
@@ -173,9 +156,7 @@ def _download_usgs(site_id: str,
         raise ValueError(f"USGS site {site_id}: empty values array for param {param_cd}")
 
     recs = vals[0]["value"]
-
-    # times include offsets; pandas will parse tz-aware
-    times = [pd.to_datetime(rec["dateTime"], utc=None) for rec in recs]
+    times = [pd.to_datetime(rec["dateTime"], utc=None) for rec in recs]  # tz-aware strings
     values = []
     for rec in recs:
         try:
@@ -183,11 +164,9 @@ def _download_usgs(site_id: str,
         except Exception:
             values.append(np.nan)
 
-    idx = pd.DatetimeIndex(times)
-    idx = _tz_to_utc_index(idx)  # ensure UTC
+    idx = _tz_to_utc_index(pd.DatetimeIndex(times))
     ser = pd.Series(values, index=idx).sort_index()
 
-    # Final windowing
     ser = _window_last_hours(ser, hours)
 
     meta = {
@@ -211,29 +190,14 @@ _WADOE_PRODUCT_BY_TYPE = {
 }
 
 def _detect_header_says_pst(text: str) -> bool:
-    """
-    Heuristic: many Ecology files state '... starting at midnight PST.' or
-    otherwise mention PST explicitly. If so, treat all times as fixed UTC-8.
-    """
     head = "\n".join(text.splitlines()[:40]).upper()
     return " PST" in head or head.strip().endswith("PST.") or "PACIFIC STANDARD TIME" in head
 
-
 def _parse_wadoe_txt(text: str,
                      expected_type: str) -> Tuple[pd.DataFrame, str, pd.Series, bool]:
-    """
-    Parse WA Ecology TXT table.
-
-    Returns:
-      df (UTC index, columns: VALUE, optional QUALITY),
-      units string,
-      quality series (or empty),
-      used_fixed_pst (bool)
-    """
     lines = text.splitlines()
     raw = [ln.rstrip("\n") for ln in lines if ln.strip()]
 
-    # Find header line
     header_idx = None
     for i, ln in enumerate(raw[:80]):
         if "DATE" in ln and "TIME" in ln and ("Discharge" in ln or "Stage" in ln):
@@ -242,7 +206,6 @@ def _parse_wadoe_txt(text: str,
     if header_idx is None:
         raise ValueError("WA Ecology TXT: could not locate header with DATE/TIME/value columns.")
 
-    # dashed separator (optional)
     sep_idx = None
     for j in range(header_idx + 1, min(header_idx + 6, len(raw))):
         if set(raw[j].strip()) <= set("- "):
@@ -252,7 +215,6 @@ def _parse_wadoe_txt(text: str,
         sep_idx = header_idx
 
     header_line = raw[header_idx]
-    # Identify units/value column
     units = None
     if "Discharge (cfs)" in header_line:
         value_col_name = "Discharge (cfs)"
@@ -263,13 +225,11 @@ def _parse_wadoe_txt(text: str,
     else:
         value_col_name = "VALUE"
 
-    # Collect rows
     data_rows = []
     for ln in raw[sep_idx + 1:]:
         if ln.startswith("A key to quality codes"):
             break
         if "--" in ln and ln.replace("-", "").strip():
-            # station title line
             continue
         if set(ln.strip()) <= set("- "):
             continue
@@ -307,10 +267,7 @@ def _parse_wadoe_txt(text: str,
 
     df = pd.DataFrame.from_records(records)
 
-    # Timestamps (naive)
     naive_ts = pd.to_datetime(df["DATE"] + " " + df["TIME"], errors="coerce")
-
-    # Decide localization mode
     use_fixed_pst = _detect_header_says_pst(text)
     if use_fixed_pst:
         pacific_idx = _localize_fixed_pst(pd.DatetimeIndex(naive_ts))
@@ -325,7 +282,6 @@ def _parse_wadoe_txt(text: str,
     df = df.drop(columns=[c for c in ("DATE", "TIME") if c in df.columns])
     df = df.sort_index()
 
-    # Units consistency check
     expected_u = (expected_type or "").upper()
     if expected_u == "FLOW" and units not in (None, "cfs"):
         logging.warning("WA Ecology: expected FLOW but detected units=%s", units)
@@ -335,20 +291,16 @@ def _parse_wadoe_txt(text: str,
     quality = df["QUALITY"] if "QUALITY" in df.columns else pd.Series(index=df.index, dtype="Int64")
     return df.rename(columns={"VALUE": value_col_name}), (units or ("cfs" if expected_u == "FLOW" else "ft")), quality, use_fixed_pst
 
-
 def _download_wadoe(site_id: str,
                     gtype: str,
                     hours: Optional[int],
                     name: Optional[str] = None,
                     product_override: Optional[str] = None,
                     allow_quality: Optional[Set[int]] = None) -> Tuple[pd.Series, Dict]:
-    """
-    Download WA Ecology TXT data. Returns UTC-indexed series.
-    """
     gtype_u = (gtype or "").upper()
     default_product_by_type = {
-        "FLOW": ("DSG_FM", "cfs"),  # Discharge, 15-min
-        "STAGE": ("STG_FM", "ft"),  # Stage, 15-min
+        "FLOW": ("DSG_FM", "cfs"),
+        "STAGE": ("STG_FM", "ft"),
     }
     if gtype_u not in default_product_by_type:
         raise ValueError(f"WA_Ecology type must be FLOW or STAGE; got {gtype!r}")
@@ -366,24 +318,19 @@ def _download_wadoe(site_id: str,
 
     df, units, quality, used_fixed_pst = _parse_wadoe_txt(r.text, expected_type=gtype_u)
 
-    # Filter by QUALITY if requested
     if allow_quality is not None and "QUALITY" in df.columns:
         before = len(df)
         df = df[df["QUALITY"].isin(allow_quality)]
         after = len(df)
         logging.info("WA Ecology: quality filter kept %d/%d rows (codes allowed: %s)", after, before, sorted(allow_quality))
 
-    # Value column back to a unified name
     value_col = "Discharge (cfs)" if gtype_u == "FLOW" else "Stage (ft)"
     if value_col not in df.columns:
-        # fallback
         value_col = "VALUE"
 
     ser = df[value_col].astype(float)
     ser.index = _tz_to_utc_index(ser.index)
     ser = ser.sort_index()
-
-    # Windowing in UTC
     ser = _window_last_hours(ser, hours)
 
     meta = {
@@ -399,6 +346,83 @@ def _download_wadoe(site_id: str,
 
 
 # ----------------------------
+# NOAA / NWPS (stage/flow JSON)
+# ----------------------------
+
+def _fetch_noaa_stageflow_df(lid: str, product: str = "observed") -> pd.DataFrame:
+    """
+    Returns tidy DataFrame:
+      columns: validTime (UTC tz-aware), stage, stage_units, flow, flow_units
+    Uses the 'header + data[]' shape of NWPS stageflow responses.
+    """
+    url = f"https://api.water.noaa.gov/nwps/v1/gauges/{lid}/stageflow/{product}"
+    sess, timeout = _retrying_session()
+    logging.info("NOAA NWPS fetch: %s", url)
+    r = sess.get(url, timeout=timeout)
+    r.raise_for_status()
+    j = r.json()
+
+    p_name  = j.get("primaryName") or "Primary"
+    p_units = j.get("primaryUnits") or ""
+    s_name  = j.get("secondaryName") or "Secondary"
+    s_units = j.get("secondaryUnits") or ""
+
+    rows = []
+    for pt in j.get("data", []):
+        rows.append({
+            "validTime": pd.to_datetime(pt.get("validTime"), utc=True),
+            "stage": pt.get("primary") if p_name.lower().startswith("stage") else pt.get("secondary"),
+            "flow":  pt.get("secondary") if s_name.lower().startswith("flow") else pt.get("primary"),
+        })
+    df = pd.DataFrame(rows).sort_values("validTime").reset_index(drop=True)
+    df["stage_units"] = p_units if p_name.lower().startswith("stage") else s_units
+    df["flow_units"]  = s_units if s_name.lower().startswith("flow")  else p_units
+    return df
+
+def _download_noaa(lid: str,
+                   gtype: str,
+                   hours: Optional[int],
+                   name: Optional[str] = None,
+                   product: str = "observed") -> Tuple[pd.Series, Dict]:
+    """
+    Download from NOAA NWPS stageflow for FLOW/STAGE.
+    product: "observed" (default) or "forecast"
+    """
+    gtype_u = (gtype or "").upper()
+    if gtype_u not in {"FLOW", "STAGE"}:
+        raise ValueError(f"NOAA type must be FLOW or STAGE; got {gtype!r}")
+
+    df = _fetch_noaa_stageflow_df(lid, product=product)
+    if df.empty:
+        raise ValueError(f"NOAA {lid}: empty stageflow response for {product}")
+
+    # Normalize units (kcfs -> cfs) and select column
+    if "flow_units" in df.columns and df["flow_units"].str.lower().eq("kcfs").any():
+        df.loc[:, "flow"] = df["flow"] * 1000.0
+        df.loc[:, "flow_units"] = "cfs"
+
+    idx = _tz_to_utc_index(pd.DatetimeIndex(df["validTime"]))
+    if gtype_u == "FLOW":
+        ser = pd.Series(df["flow"].astype(float).to_numpy(), index=idx).sort_index()
+        units = (df["flow_units"].dropna().iloc[0] if not df["flow_units"].dropna().empty else "")
+    else:
+        ser = pd.Series(df["stage"].astype(float).to_numpy(), index=idx).sort_index()
+        units = (df["stage_units"].dropna().iloc[0] if not df["stage_units"].dropna().empty else "")
+
+    ser = _window_last_hours(ser, hours)
+
+    meta = {
+        "service": "NOAA",
+        "site_id": lid,
+        "name": name or lid,
+        "units": units or ("cfs" if gtype_u == "FLOW" else "ft"),
+        "type": gtype_u,
+        "product": product,
+    }
+    return ser, meta
+
+
+# ----------------------------
 # Public dispatcher
 # ----------------------------
 
@@ -408,8 +432,8 @@ def download_gage(gage: Dict,
                   product_override: Optional[str] = None) -> Tuple[pd.Series, Dict]:
     """
     gage = {
-        "service": "USGS" | "WA_Ecology",
-        "site_id": "string",
+        "service": "USGS" | "WA_Ecology" | "NOAA",
+        "site_id": "string",     # USGS station id, Ecology station code, or NOAA LID (e.g., LWWW1)
         "type": "FLOW" | "STAGE",
         "state": "WA", "latitude": 45.0, "longitude": -122.0, "name": "Display Name" (optional)
     }
@@ -422,12 +446,17 @@ def download_gage(gage: Dict,
     if not service or not site_id or gtype not in {"FLOW", "STAGE"}:
         raise ValueError(f"Invalid gage descriptor: {gage}")
 
-    if service == "USGS":
+    if service.upper() == "USGS":
         return _download_usgs(site_id, gtype, hours, name=name)
 
-    if service in {"WA_Ecology", "WA_ECOLOGY", "WA-Ecology"}:
+    if service.upper() in {"WA_ECOLOGY", "WA_ECOLOGY".upper(), "WA-ECOLOGY", "WA_Ecology"}:
         return _download_wadoe(site_id, gtype, hours, name=name,
                                product_override=product_override,
                                allow_quality=allow_quality)
+
+    if service.upper() in {"NOAA", "NWPS"}:
+        # Default to observed unless caller overrides (e.g., "forecast")
+        product = (product_override or "observed").lower()
+        return _download_noaa(site_id, gtype, hours, name=name, product=product)
 
     raise NotImplementedError(f"Service {service!r} not supported yet.")

@@ -822,18 +822,21 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
         # xaxis_title="Local time",
         yaxis_title="Precipitation (in)",
         barmode="group",
-        legend=dict(
-            title="Toggle series",
-            groupclick="togglegroup",
-            orientation="v",
-            yanchor="top", y=1,
-            xanchor="left", x=1.02,
-            bgcolor="rgba(255,255,255,0.8)",
-            bordercolor="rgba(0,0,0,0.2)", borderwidth=1
-        ),
         hovermode="x unified",
-        margin=dict(l=60, r=140, t=20 if not title else 70, b=60),
-        showlegend=True,  # <-- forces legend even for a single series
+        margin=dict(l=60, r=60, t=20 if not title else 70, b=60),
+        showlegend=True,  # keep legend even for a single series
+        legend=dict(
+            # Upper-left, inside the plot box
+            x=0.02, y=0.98,
+            xanchor="left", yanchor="top",
+            orientation="v",
+            # Transparent legend box
+            bgcolor="rgba(255,255,255,0.55)",   # <–– semi-transparent white box (0.0=clear, 1.0=opaque)
+            bordercolor="rgba(0,0,0,0.25)", 
+            # Keep your group toggle behavior
+            groupclick="togglegroup",
+            title=""  # optional: remove legend title
+        ),
     )
     if title:
         layout_kwargs["title"] = title
@@ -892,16 +895,18 @@ def plotly_ts_gages(gage_series: List[Tuple[str, pd.Series, str]], title: str, o
         # xaxis_title="Local time",
         yaxis_title=ytitle or "Value",
         hovermode="x unified",
-        margin=dict(l=60, r=140, t=20 if not title else 70, b=60),
+        margin=dict(l=60, r=60, t=20 if not title else 70, b=60),
+        showlegend=True,
         legend=dict(
+            # Upper-left, inside the plot box
+            x=0.02, y=0.98,
+            xanchor="left", yanchor="top",
             orientation="v",
-            yanchor="top", y=1,
-            xanchor="left", x=1.02,
-            title="Toggle series",
-            bgcolor="rgba(255,255,255,0.8)",
-            bordercolor="rgba(0,0,0,0.2)", borderwidth=1
+            # Transparent legend box
+            bgcolor="rgba(255,255,255,0.55)",   # <–– semi-transparent white box (0.0=clear, 1.0=opaque)
+            bordercolor="rgba(0,0,0,0.25)", 
+            title=""  # optional
         ),
-        showlegend=True,  # <-- ensures legend shows for one series
     )
     if title:
         layout_kwargs["title"] = title
