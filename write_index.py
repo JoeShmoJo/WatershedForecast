@@ -189,7 +189,7 @@ def _tile_html(basin_key: str, docs_dir: Path, assets_info: dict) -> str:
     gage_html_rel = _rel_from_docs(assets_info["gage_html"], docs_dir)
 
     card_map  = _img_card("Cumulative Map (next 24h)", map_png_rel)
-    card_ts   = _iframe_card("Hourly (grouped) + Cumulative (next 24h)", ts_html_rel)
+    card_ts   = _iframe_card("Hourly + Cumulative (next 24h)", ts_html_rel)
     card_gage = _iframe_card("Gage Data (last 24h)", gage_html_rel)
 
     return f"""

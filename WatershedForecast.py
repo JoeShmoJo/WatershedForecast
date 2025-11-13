@@ -685,7 +685,7 @@ def plot_cumulative_map_plotly_then_fallback(
                 ticktext=[f"{lv:g}" for lv in range(int(lmin), int(lmax) + 1)],
                 len=0.85,
             ),
-            hovertemplate="Lon %{x:.3f}, Lat %{y:.3f}<br>%{z:.2f} in<extra></extra>",
+            # hovertemplate="Lon %{x:.3f}, Lat %{y:.3f}<br>%{z:.2f} in<extra></extra>",
         ))
 
         # --- Sub-basin outlines ---
@@ -806,7 +806,7 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
             name=f"{label} hourly",
             legendgroup=label, showlegend=False,
             offsetgroup=label,
-            hovertemplate="%{x|%a %b %d %H:%M}<br>%{y:.2f} in<hr>",
+            # hovertemplate="%{x|%a %b %d %H:%M}<br>%{y:.2f} in<hr>",
             marker_color=color, opacity=0.75 if i == 0 else 0.55,
         )
         # Cumulative line (legend entry)
@@ -814,7 +814,7 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
             x=ser.index, y=ser.cumsum().values,
             mode="lines",
             name=label, legendgroup=label,
-            hovertemplate="%{x|%a %b %d %H:%M}<br>Cumulative %{y:.2f} in<hr>",
+            # hovertemplate="%{x|%a %b %d %H:%M}<br>Cumulative %{y:.2f} in<hr>",
             line=dict(color=color), marker=dict(color=color),
         ))
 
@@ -822,7 +822,7 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
         # xaxis_title="Local time",
         yaxis_title="Precipitation (in)",
         barmode="group",
-        hovermode="x unified",
+        # hovermode="x unified",
         margin=dict(l=60, r=60, t=20 if not title else 70, b=60),
         showlegend=True,  # keep legend even for a single series
         legend=dict(
@@ -879,7 +879,7 @@ def plotly_ts_gages(gage_series: List[Tuple[str, pd.Series, str]], title: str, o
             x=s_loc.index, y=s_loc.values,
             mode="lines",
             name=label,
-            hovertemplate="%{x|%a %b %d %H:%M}<br>%{y:.2f} " + (units or "") + "<hr>",
+            # hovertemplate="%{x|%a %b %d %H:%M}<br>%{y:.2f} " + (units or "") + "<hr>",
         ))
         unit_set.add(units or "")
         any_data = True
@@ -894,7 +894,7 @@ def plotly_ts_gages(gage_series: List[Tuple[str, pd.Series, str]], title: str, o
     layout_kwargs = dict(
         # xaxis_title="Local time",
         yaxis_title=ytitle or "Value",
-        hovermode="x unified",
+        # hovermode="x unified",
         margin=dict(l=60, r=60, t=20 if not title else 70, b=60),
         showlegend=True,
         legend=dict(
