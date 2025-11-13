@@ -1,11 +1,6 @@
-# Generated plots
-docs/assets/*/area_precip_*.png
-docs/assets/*/area_precip_*.svg
-docs/assets/*/ts_precip_*.html
-docs/assets/*/gage_*.html
+# Ignore all generated assets
+docs/assets/
 
-# But keep the latest pointers
-!docs/assets/*/area_precip_latest.png
-!docs/assets/*/area_precip_latest.svg
-!docs/assets/*/ts_precip_latest.html
-!docs/assets/*/gage_latest.html
+# Python cache
+__pycache__/
+*.pyc
