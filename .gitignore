@@ -1,6 +1,26 @@
-# Ignore all generated assets
-docs/assets/
-
-# Python cache
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+*.env
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Cache and temp folders
+*.egg-info/
+.build/
+dist/
+.cache/
+.ipynb_checkpoints/
+
+# Logs
+*.log
