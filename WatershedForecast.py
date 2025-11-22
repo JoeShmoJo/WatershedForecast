@@ -310,7 +310,7 @@ def open_nbm_subset(opendap_url: str, basin: Polygon, hours: int) -> Tuple[xr.Da
 # ----------------------------
 # Geometry
 # ----------------------------
-def get_watershed_basin(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 30, streamstats_retries: int = 5) -> Polygon:
+def get_watershed_basin(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 90, streamstats_retries: int = 5) -> Polygon:
     basin_dir = cfg.root / cfg.basins_dir / cfg.name
     basin_dir.mkdir(parents=True, exist_ok=True)
     geojson_path = basin_dir / "basin.geojson"
