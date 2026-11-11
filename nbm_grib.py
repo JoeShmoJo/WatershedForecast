@@ -1,4 +1,4 @@
-"""Fetch deterministic, one-hour NBM QPF and normalize its native Lambert grid.
+"""Fetch deterministic NBM QPF intervals and normalize its native Lambert grid.
 
 The public NOAA bucket requires no credentials. Only the indexed precipitation
 message is downloaded, rather than each ~160 MB multi-variable forecast file.
@@ -33,13 +33,22 @@ def forecast_url(base, cycle, hour):
     return f"{base}/blend.{cycle:%Y%m%d/%H}/core/blend.t{cycle:%H}z.core.f{hour:03d}.co.grib2"
 
 
-def precipitation_range(index, hour):
-    """Select precisely the deterministic (hour-1, hour] accumulation."""
+def forecast_steps(hours):
+    """Nonoverlapping intervals; preserve hourly detail for the first day."""
+    if 1 <= hours <= 36:
+        return [(h, 1) for h in range(1, hours+1)]
+    if hours not in (48, 72):
+        raise ValueError("Choose 1–36, 48, or 72 forecast hours")
+    return [(h, 1) for h in range(1, 25)] + [(h, 6) for h in range(30, hours+1, 6)]
+
+
+def precipitation_range(index, hour, interval_hours=1):
+    """Select precisely one deterministic accumulation, excluding probabilities."""
     lines = index.splitlines()
-    pattern = re.compile(rf"^\d+:\d+:d=\d+:APCP:surface:{hour-1}-{hour} hour acc fcst:$")
+    pattern = re.compile(rf"^\d+:\d+:d=\d+:APCP:surface:{hour-interval_hours}-{hour} hour acc fcst:$")
     matches = [i for i, line in enumerate(lines) if pattern.fullmatch(line)]
     if len(matches) != 1:
-        raise ValueError(f"Expected one deterministic one-hour APCP message for f{hour:03d}; found {len(matches)}")
+        raise ValueError(f"Expected one deterministic {interval_hours}-hour APCP message for f{hour:03d}; found {len(matches)}")
     i = matches[0]
     start = int(lines[i].split(":")[1])
     end = int(lines[i+1].split(":")[1])-1 if i+1 < len(lines) else None
@@ -47,6 +56,7 @@ def precipitation_range(index, hour):
 
 
 def discover_cycle(hours=24, now=None):
+    steps = forecast_steps(hours)
     now = now or datetime.now(timezone.utc)
     candidate = now.replace(hour=(now.hour//6)*6, minute=0, second=0, microsecond=0)
     # Never silently fall back to forecasts more than 18 hours old.
@@ -57,10 +67,10 @@ def discover_cycle(hours=24, now=None):
                 continue
             for base in (AWS, NOMADS):
                 try:
-                    for hour in sorted({1, hours}):
+                    for hour, interval in dict.fromkeys([steps[0], steps[-1]]):
                         r = s.get(forecast_url(base, cycle, hour)+".idx", timeout=20)
                         r.raise_for_status()
-                        precipitation_range(r.text, hour)
+                        precipitation_range(r.text, hour, interval)
                     logging.info("Selected NBM cycle %s from %s", cycle.isoformat(), base)
                     return cycle, base
                 except (requests.RequestException, ValueError) as e:
@@ -72,15 +82,16 @@ def valid_grib(data):
     return len(data) >= 20 and data[:4] == b"GRIB" and data[-4:] == b"7777" and int.from_bytes(data[8:16], "big") == len(data)
 
 
-def download_hour(base, cycle, hour, cache):
-    target = cache / f"nbm_{cycle:%Y%m%d%H}_f{hour:03d}_apcp.grib2"
+def download_hour(base, cycle, hour, cache, interval_hours=1):
+    suffix = "" if interval_hours == 1 else f"_p{interval_hours}"
+    target = cache / f"nbm_{cycle:%Y%m%d%H}_f{hour:03d}{suffix}_apcp.grib2"
     if target.exists() and valid_grib(target.read_bytes()):
         return target
     url = forecast_url(base, cycle, hour)
     with session() as s:
         r = s.get(url+".idx", timeout=30)
         r.raise_for_status()
-        start, end = precipitation_range(r.text, hour)
+        start, end = precipitation_range(r.text, hour, interval_hours)
         r = s.get(url, headers={"Range": f"bytes={start}-{end if end is not None else ''}"}, timeout=90)
         r.raise_for_status()
         if r.status_code != 206 or not r.headers.get("Content-Range", "").startswith(f"bytes {start}-"):
@@ -114,7 +125,7 @@ def lambert_grid(gid):
     return transform, x0 + np.arange(ec.codes_get(gid, "Nx"))*dx, y0 + np.arange(ec.codes_get(gid, "Ny"))*dy
 
 
-def decode_hour(path, cycle, hour, lat, lon):
+def decode_hour(path, cycle, hour, lat, lon, interval_hours=1):
     with path.open("rb") as f:
         gid = ec.codes_grib_new_from_file(f)
     if gid is None:
@@ -124,9 +135,9 @@ def decode_hour(path, cycle, hour, lat, lon):
         if actual_cycle != cycle.strftime("%Y%m%d%H%M"):
             raise ValueError("GRIB cycle does not match requested cycle")
         if (ec.codes_get(gid, "shortName") != "tp" or ec.codes_get(gid, "stepType") != "accum"
-                or ec.codes_get(gid, "startStep") != hour-1 or ec.codes_get(gid, "endStep") != hour
+                or ec.codes_get(gid, "startStep") != hour-interval_hours or ec.codes_get(gid, "endStep") != hour
                 or ec.codes_get(gid, "stepUnits") != 1):
-            raise ValueError(f"Expected one-hour total precipitation for forecast hour {hour}")
+            raise ValueError(f"Expected {interval_hours}-hour total precipitation for forecast hour {hour}")
         units = ec.codes_get(gid, "units")
         if units not in ("kg m**-2", "kg m-2", "mm"):
             raise ValueError(f"Unexpected precipitation units: {units}")
@@ -145,27 +156,27 @@ def decode_hour(path, cycle, hour, lat, lon):
 
 
 def load_forecast(bounds, hours, cache, workers=4, cycle=None):
-    if not 1 <= hours <= 36:
-        raise ValueError("Hourly NBM forecasts support --hours 1 through 36")
+    steps = forecast_steps(hours)
     if cycle is None:
         cycle, base = discover_cycle(hours)
     else:
         base = AWS
     cache = Path(cache)
     if cache.exists():
-        for old in cache.glob("nbm_*_f???_apcp.grib2"):
-            match = re.fullmatch(r"nbm_(\d{10})_f\d{3}_apcp.grib2", old.name)
+        for old in cache.glob("nbm_*_apcp.grib2"):
+            match = re.fullmatch(r"nbm_(\d{10})_f\d{3}(?:_p6)?_apcp.grib2", old.name)
             if match and datetime.strptime(match[1], "%Y%m%d%H").replace(tzinfo=timezone.utc) < cycle-timedelta(days=2):
                 old.unlink()
     with ThreadPoolExecutor(max_workers=min(max(1, workers), 4)) as pool:
-        paths = list(pool.map(lambda h: download_hour(base, cycle, h, cache), range(1, hours+1)))
+        paths = list(pool.map(lambda step: download_hour(base, cycle, step[0], cache, step[1]), steps))
     # Normalize the projected native grid onto a regional regular lat/lon grid;
     # downstream basin masking and cos(latitude) weighting can then be reused.
     x0, y0, x1, y1 = bounds
     lat = np.arange(y0-.1, y1+.125, .025)
     lon = np.arange(x0-.1, x1+.125, .025)
-    data = np.stack([decode_hour(p, cycle, h, lat, lon) for h, p in enumerate(paths, 1)])
-    times = [np.datetime64((cycle+timedelta(hours=h)).replace(tzinfo=None), "ns") for h in range(1, hours+1)]
-    return xr.DataArray(data, dims=("time", "lat", "lon"), coords={"time": times, "lat": lat, "lon": lon},
+    data = np.stack([decode_hour(p, cycle, h, lat, lon, interval) for p, (h, interval) in zip(paths, steps)])
+    times = [np.datetime64((cycle+timedelta(hours=h)).replace(tzinfo=None), "ns") for h, _ in steps]
+    return xr.DataArray(data, dims=("time", "lat", "lon"), coords={"time": times, "lat": lat, "lon": lon,
+                        "interval_hours": ("time", [interval for _, interval in steps])},
                         attrs={"units": "mm", "cycle": cycle.isoformat(), "source": base,
-                               "accumulation": "one hour ending at valid time"})
+                               "accumulation": "interval ending at valid time; see interval_hours"})

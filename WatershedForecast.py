@@ -641,7 +641,8 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
                            subs_hourly_map_utc: Dict[str, pd.Series] | None,
                            title: str,
                            outfile_html: str,
-                           base_label: str = "Parent"):
+                           base_label: str = "Parent",
+                           interval_hours=None):
     """
     Bars: hourly for each series (grouped)
     Lines: cumulative for the same series
@@ -661,6 +662,9 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
     all_index = pd.DatetimeIndex(sorted(set().union(*[s.index for s in series_local.values()])))
     for k in list(series_local.keys()):
         series_local[k] = series_local[k].reindex(all_index, fill_value=0.0)
+    intervals = np.ones(len(all_index)) if interval_hours is None else np.asarray(interval_hours)
+    if len(intervals) != len(all_index) or (intervals <= 0).any():
+        raise ValueError("Precipitation interval lengths must match the plotted series")
 
     # Palette (explicit so bars & lines match)
     palette = [
@@ -673,8 +677,11 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
         color = palette[i % len(palette)]
         # Bars (no legend entry; grouped by offsetgroup)
         fig.add_bar(
-            x=ser.index, y=ser.values,
-            name=f"{label} hourly",
+            x=ser.index-pd.to_timedelta(intervals/2, unit="h"), y=ser.values,
+            width=intervals*3600000*.8/len(series_local),
+            customdata=np.column_stack([intervals, ser.index.strftime('%b %d %H:%M %Z')]),
+            hovertemplate="%{y:.3f} in over %{customdata[0]}h<br>Ending %{customdata[1]}<extra></extra>",
+            name=f"{label} interval total",
             legendgroup=label, showlegend=False,
             offsetgroup=label,
             # hovertemplate="%{x|%a %b %d %H:%M}<br>%{y:.2f} in<hr>",
@@ -690,6 +697,7 @@ def plotly_ts_precip_multi(parent_hourly_utc: pd.Series,
         ))
 
     layout_kwargs = dict(
+        template="plotly_white",
         # xaxis_title="Local time",
         yaxis_title="Precipitation (in)",
         barmode="group",
@@ -759,10 +767,13 @@ def plotly_ts_gages(gage_series: List[Tuple[str, pd.Series, str]], title: str, o
         fig.add_annotation(text="No gage data available", xref="paper", yref="paper", x=0.5, y=0.5,
                            showarrow=False, font=dict(size=16))
         ytitle = ""
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
     else:
         ytitle = " / ".join(sorted(u for u in unit_set if u))
 
     layout_kwargs = dict(
+        template="plotly_white",
         # xaxis_title="Local time",
         yaxis_title=ytitle or "Value",
         # hovermode="x unified",

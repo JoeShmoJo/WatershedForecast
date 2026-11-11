@@ -99,27 +99,35 @@ def _detect_assets(assets_dir: Path) -> dict:
 
 STYLE = r"""
   <style>
-    :root { --gap: 20px; --card-bg: #fff; --muted: #666; }
-    body { font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 24px; color: #222; background: #fdfdfd; }
-    h1 { text-align: center; margin-bottom: 10px; }
-    h2 { margin-top: 40px; border-bottom: 2px solid #ccc; padding-bottom: 6px; }
-    .basin { margin-bottom: 48px; }
-    .plots { display: flex; flex-wrap: wrap; gap: var(--gap); justify-content: space-around; }
-    .card { flex: 1 1 420px; background: var(--card-bg); border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); padding: 12px; text-align: center; }
-    .card h3 { font-weight: 600; color: #444; margin: 8px 0 12px; font-size: 1.05rem; }
-    .card img { max-width: 560px; width: 100%; border: 1px solid #e6e6e6; border-radius: 4px; }
-    .iframe-wrap { width: 100%; max-width: 560px; margin: 0 auto; }
-    .iframe-wrap iframe { width: 100%; height: 520px; border: 0; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-    .placeholder { display: grid; place-items: center; height: 520px; border: 2px dashed #cfcfcf; border-radius: 6px; color: var(--muted);
-                   background: repeating-linear-gradient(45deg, #fafafa, #fafafa 10px, #f6f6f6 10px, #f6f6f6 20px); }
-    .placeholder span { font-size: 0.95rem; }
-    .linkrow { margin-top: 8px; }
-    .linkrow a { color: #0b5fd7; text-decoration: none; }
-    .linkrow a:hover { text-decoration: underline; }
-    .topnote { text-align:center; }
-    footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: var(--muted); }
-    .views { margin-top: 8px; }
-    @media (max-width: 600px) { body { margin: 12px; } }
+    :root { --gap: 18px; --card-bg: #fff; --muted: #607181; --ink: #20394c; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0 auto; max-width: 1640px; padding: 30px 24px; color: var(--ink); background: #f3f7f9; }
+    h1 { text-align: center; margin: 6px 0 12px; font-size: clamp(1.8rem, 3vw, 2.4rem); letter-spacing: -.035em; }
+    h1 + p { text-align: center; color: var(--muted); font-size: .9rem; }
+    h2 { margin: 0 0 12px; font-size: 1.55rem; letter-spacing: -.02em; }
+    .basin { margin: 34px 0 44px; }
+    .basin > p { color: var(--muted); font-size: .8rem; }
+    .plots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+    .card { min-width: 0; background: var(--card-bg); border: 1px solid #dce5eb; border-radius: 12px; box-shadow: 0 3px 12px #17364a06; padding: 15px 12px; text-align: center; }
+    .card h3 { font-weight: 600; margin: 2px 0 16px; font-size: .95rem; }
+    .card img { max-width: 560px; width: 100%; border-radius: 6px; }
+    .iframe-wrap { width: 100%; margin: 0 auto; }
+    .iframe-wrap iframe { width: 100%; height: 440px; border: 0; border-radius: 6px; }
+    .placeholder { display: grid; place-items: center; height: 440px; border: 1px dashed #cfcfcf; border-radius: 6px; color: var(--muted); background: #f8fafb; }
+    .linkrow { margin-top: 10px; font-size: .85rem; }
+    a { color: #087ca9; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .topnote { text-align: center; color: var(--muted); font-size: .85rem; margin: 8px 0; }
+    #forecast-duration { justify-content: center; }
+    #forecast-duration .duration-label { flex-basis: 100%; text-align: center; font-size: .85rem; color: var(--muted); }
+    #forecast-duration button { min-width: 100px; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #e7b34e; outline-offset: 3px; }
+    .basin-totals { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 16px; }
+    .basin-totals span { padding: 7px 12px; border: 1px solid #d6e5ec; border-radius: 7px; background: #fff; font-size: .85rem; }
+    .basin-totals span:first-child { color: #086a93; background: #eaf4f9; border-color: #c9dfeb; font-weight: 650; }
+    footer { margin-top: 50px; text-align: center; font-size: .8rem; color: var(--muted); }
+    @media (max-width: 1100px) { .plots { grid-template-columns: repeat(2, minmax(0, 1fr)); } .plots > .card:first-child { grid-column: 1 / -1; } .card img { max-width: 550px; } }
+    @media (max-width: 640px) { body { padding: 18px 12px; } .plots { grid-template-columns: 1fr; } .plots > .card:first-child { grid-column: auto; } .iframe-wrap iframe { height: 400px; } .basin { margin-top: 28px; } #forecast-duration button { min-width: 0; flex: 1; padding: 9px 12px; } }
   </style>
 """
 
@@ -166,11 +174,11 @@ def _tile_html(basin_key: str, docs_dir: Path, assets_info: dict, status: dict |
 
     hours = (status or {}).get("forecast", {}).get("hours", 24)
     card_map  = _img_card(f"Cumulative Map ({hours}h forecast)", map_png_rel)
-    card_ts   = _iframe_card(f"Hourly + Cumulative ({hours}h forecast)", ts_html_rel)
+    card_ts   = _iframe_card(f"Precipitation + Cumulative ({hours}h forecast)", ts_html_rel)
     card_gage = _iframe_card("Gage Data (last 24h)", gage_html_rel)
     observations = []
     for gage in (status or {}).get("gages", {}).get(basin_key, []):
-        label = escape(f"{gage['name']} ({gage['service']})")
+        label = escape(f"{gage['name']} ({gage['service'].replace('_', ' ')})")
         if gage.get("latest"):
             observations.append(f"{label}: <time data-observation-time='{escape(gage['latest'])}'>{escape(gage['latest'])}</time>")
         else:
@@ -178,8 +186,9 @@ def _tile_html(basin_key: str, docs_dir: Path, assets_info: dict, status: dict |
     observation_html = "<p>Observations — " + "; ".join(observations) + "</p>" if observations else ""
 
     return f"""
-  <div class="basin">
-    <h2>{escape(basin_key)}</h2>
+  <div class="basin" data-basin="{escape(basin_key, quote=True)}">
+    <h2>{escape(basin_key.replace("_", " "))}</h2>
+    <div class="basin-totals" aria-live="polite"></div>
     {observation_html}
     <div class="plots">
       {card_map}
@@ -196,9 +205,17 @@ def build_index_html(root: Path, title: str) -> str:
     status_path = docs_dir / "status.json"
     status = json.loads(status_path.read_text()) if status_path.exists() else {}
     forecast = status.get("forecast", {})
+    periods = forecast.get("periods", {})
+    duration_controls = ""
+    if len(periods) > 1:
+        buttons = "".join(f'<button type="button" data-hours="{h}" aria-pressed="{str(int(h)==forecast["hours"]).lower()}">{int(h)//24} day{"s" if int(h)>24 else ""}</button>' for h in periods)
+        duration_controls = f'''<div id="forecast-duration" role="group" aria-label="Forecast duration"><span class="duration-label">Forecast duration</span>{buttons}</div>
+        <p class="topnote">Totals start at the same model initialization. Select more days to extend the forecast.</p>
+        <p class="topnote" id="interval-note">{escape(periods[str(forecast['hours'])]['interval_note'])}</p>
+        <style>#forecast-duration{{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:18px 0 8px}}#forecast-duration .duration-label{{font-weight:600;margin-bottom:8px}}#forecast-duration button{{font:inherit;padding:9px 18px;border:1px solid #aebfc9;border-radius:6px;background:white;cursor:pointer}}#forecast-duration button[aria-pressed=true]{{background:#087fb0;color:white;border-color:#087fb0}}</style>'''
     if forecast.get("state") == "ok":
         freshness = f"""<p>Forecast initialized: <time id="forecast-cycle" datetime="{escape(forecast['cycle'])}">{escape(forecast['cycle'])}</time>.
-        Forecast period (UTC): {escape(forecast['valid_start'])} through {escape(forecast['valid_end'])}.</p>
+        Forecast period: <time id="forecast-start">{escape(forecast['valid_start'])}</time> through <time id="forecast-end">{escape(forecast['valid_end'])}</time>.</p>
         <p id="freshness-warning" role="status" hidden style="color:#a32900;font-weight:bold">Forecast data is stale. The latest update has not arrived.</p>"""
     else:
         freshness = '<p role="status">Forecast freshness has not been verified.</p>'
@@ -212,11 +229,12 @@ def build_index_html(root: Path, title: str) -> str:
 {STYLE}
 </head>
 <body>
-  <h1>Watershed Forecast Plots</h1>
+  <h1>Watershed Forecasts</h1>
   {freshness}
+  {duration_controls}
   <p class="topnote">National Blend of Models <a href="https://vlab.noaa.gov/web/mdl/nbm" target="_blank" rel="noopener">NBM Info</a> basin precipitation forecast and USGS streamflow summaries.</p>
   <p class="topnote">Precipitation grids cut to basin. Forecasts updated every ~6 hours.</p>
-  <p class="topnote"> TURN YOUR PHONE SIDEWAYS </p>
+
 """
 
     body = []
@@ -241,8 +259,10 @@ def build_index_html(root: Path, title: str) -> str:
     freshness_script = """<script>
 function updateFreshness() {
   const cycle = document.getElementById('forecast-cycle');
-  if (cycle) document.getElementById('freshness-warning').hidden =
-    Date.now() - Date.parse(cycle.dateTime) <= 18 * 3600000;
+  if (cycle) {
+    document.getElementById('freshness-warning').hidden = Date.now() - Date.parse(cycle.dateTime) <= 18 * 3600000;
+    cycle.textContent = new Date(cycle.dateTime).toLocaleString(undefined, {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+  }
   document.querySelectorAll('[data-observation-time]').forEach(el => {
     const stale = Date.now() - Date.parse(el.dataset.observationTime) > 3 * 3600000;
     el.style.color = stale ? '#a32900' : '';
@@ -252,7 +272,45 @@ function updateFreshness() {
 }
 updateFreshness(); setInterval(updateFreshness, 60000);
 </script>"""
-    return head + "\n".join(body) + freshness_script + foot
+    duration_script = '''<script id="forecast-periods" type="application/json">'''+json.dumps(periods).replace('<', '\\u003c')+'''</script><script>
+const forecastPeriods = JSON.parse(document.getElementById('forecast-periods').textContent);
+function selectForecast(hours) {
+  const period = forecastPeriods[String(hours)];
+  if (!period) return;
+  const format = value => new Date(value).toLocaleString(undefined, {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+  document.getElementById('forecast-start').textContent = format(period.valid_start);
+  document.getElementById('forecast-end').textContent = format(period.valid_end);
+  const note = document.getElementById('interval-note');
+  if (note) note.textContent = period.interval_note;
+  document.querySelectorAll('[data-hours]').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.hours) === Number(hours))));
+  document.querySelectorAll('[data-basin]').forEach(basin => {
+    const assets = period.assets[basin.dataset.basin];
+    if (!assets) return;
+    const totals = basin.querySelector('.basin-totals');
+    if (totals) {
+      const names = [basin.dataset.basin, ...Object.keys(period.assets).filter(name => name.startsWith(basin.dataset.basin + '/'))];
+      totals.replaceChildren(...names.map(name => {
+        const item = document.createElement('span');
+        const label = name === basin.dataset.basin ? 'Basin average' : name.split('/').slice(1).join(' / ').replaceAll('_', ' ');
+        item.textContent = `${label}: ${period.assets[name].total_inches.toFixed(2)} in`;
+        return item;
+      }));
+    }
+    const cards = basin.querySelectorAll('.plots > .card');
+    cards[0].querySelector('h3').textContent = `Cumulative Map (${hours}h forecast)`;
+    const image = cards[0].querySelector('img');
+    if (image) { image.src = assets.map; image.alt = `Cumulative precipitation over ${hours} hours`; }
+    cards[0].querySelectorAll('a').forEach(link => link.href = assets.map);
+    cards[1].querySelector('h3').textContent = `Precipitation + Cumulative (${hours}h forecast)`;
+    const frame = cards[1].querySelector('iframe');
+    if (frame && frame.getAttribute('src') !== assets.series) frame.src = assets.series;
+    cards[1].querySelectorAll('a').forEach(link => link.href = assets.series);
+  });
+}
+document.querySelectorAll('[data-hours]').forEach(button => button.addEventListener('click', () => selectForecast(button.dataset.hours)));
+selectForecast(Object.keys(forecastPeriods)[0]);
+</script>'''
+    return head + "\n".join(body) + freshness_script + duration_script + foot
 
 
 def main():

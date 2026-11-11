@@ -18,6 +18,25 @@ CYCLE = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
 
 
 class ForecastTests(unittest.TestCase):
+    def test_three_day_intervals_cover_each_hour_exactly_once(self):
+        steps = nbm.forecast_steps(72)
+        self.assertEqual(steps[:24], [(h, 1) for h in range(1, 25)])
+        self.assertEqual(steps[24:], [(h, 6) for h in range(30, 73, 6)])
+        start = 0
+        for end, interval in steps:
+            self.assertEqual(end-interval, start)
+            start = end
+        self.assertEqual(start, 72)
+        self.assertEqual(sum(interval for _, interval in steps), 72)
+        with self.assertRaises(ValueError):
+            nbm.forecast_steps(49)
+
+    def test_long_range_selector_uses_six_hour_total_not_one_hour_sample(self):
+        index = ('1:0:d=2026111112:APCP:surface:47-48 hour acc fcst:\n'
+                 '2:100:d=2026111112:APCP:surface:42-48 hour acc fcst:\n'
+                 '3:250:d=2026111112:TMP:surface:48 hour fcst:\n')
+        self.assertEqual(nbm.precipitation_range(index, 48, 6), (100, 249))
+        self.assertEqual(nbm.precipitation_range(index, 48, 1), (0, 99))
     def test_hourly_selector_excludes_probabilities_and_six_hour_total(self):
         index = ('1:0:d=2026111112:APCP:surface:5-6 hour acc fcst:prob >0.254:prob fcst 255/255\n'
                  '2:100:d=2026111112:APCP:surface:5-6 hour acc fcst:\n'
@@ -111,6 +130,41 @@ class SiteTests(unittest.TestCase):
             self.assertIn('forecast-cycle', html)
             self.assertIn('2h forecast', html)
             self.assertIn('18 * 3600000', html)
+
+    def test_day_controls_totals_and_subbasins_share_one_model_cycle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); self.prepare_root(root)
+            config = json.loads((root/'Config.json').read_text())
+            config['Test']['subbasins'] = {'Upper': {'state': 'WA', 'latitude': 45., 'longitude': -122.}}
+            (root/'Config.json').write_text(json.dumps(config))
+            sub = root/'Basins/Test/Upper'; sub.mkdir()
+            (sub/'basin.geojson').write_text((root/'Basins/Test/basin.geojson').read_text())
+            steps = nbm.forecast_steps(72)
+            axis = np.arange(44.9, 45.21, .025)
+            longitude = np.arange(-122.2, -121.89, .025)
+            intervals = np.array([duration for _, duration in steps])
+            values = np.broadcast_to(intervals[:, None, None]*2.54, (len(steps), len(axis), len(longitude))).copy()
+            data = xr.DataArray(values, dims=('time', 'lat', 'lon'),
+                                coords={'time': [pd.Timestamp(CYCLE).tz_localize(None)+pd.Timedelta(hours=h) for h, _ in steps],
+                                        'lat': axis, 'lon': longitude, 'interval_hours': ('time', intervals)},
+                                attrs={'cycle': CYCLE.isoformat(), 'source': nbm.AWS, 'units': 'mm'})
+            with patch.object(build_site, 'load_forecast', return_value=data) as fetch:
+                status = build_site.build(root, root/'output', root/'cache', days=[1, 2, 3])
+            fetch.assert_called_once()
+            self.assertEqual(fetch.call_args.args[1], 72)
+            self.assertEqual(status['forecast']['available_hours'], [24, 48, 72])
+            for hours, rows in [(24, 24), (48, 28), (72, 32)]:
+                period = status['forecast']['periods'][str(hours)]
+                for name in ['Test', 'Test/Upper']:
+                    frame = pd.read_csv(root/'output'/period['assets'][name]['csv'])
+                    self.assertEqual(len(frame), rows)
+                    self.assertEqual(frame.interval_hours.sum(), hours)
+                    self.assertAlmostEqual(frame.precipitation_inches.sum(), hours*.1)
+                    self.assertAlmostEqual(period['assets'][name]['total_inches'], hours*.1)
+                chart = (root/'output'/period['assets']['Test']['series']).read_text()
+                self.assertIn('Upper', chart)
+                self.assertIn('interval total', chart)
+            self.assertIn('data-hours="72"', (root/'output/index.html').read_text())
 
     def test_forecast_failure_preserves_site_and_still_fetches_gages(self):
         with tempfile.TemporaryDirectory() as tmp:

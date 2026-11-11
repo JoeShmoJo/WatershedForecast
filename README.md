@@ -24,7 +24,15 @@ files under `docs/`. No API keys, Chromium, system package installation, or
 StreamStats requests are required. Every configured basin needs a cached
 `Basins/<name>/basin.geojson`. Ring intersections are repaired in memory.
 
-`--hours` accepts 1–36 (default 24); `--workers` controls download concurrency,
+The default build offers **1 day, 2 days, and 3 days** on the existing page.
+Selecting a duration updates every basin map, subbasin total, and precipitation
+chart from the same model cycle. Gage charts continue showing the last 24 hours
+of observations. Forecast start/end times are displayed in the viewer's local
+timezone. The separate `portal_experiment/` prototype is not imported, built,
+or deployed by this workflow.
+
+Use `--days 1 2 3` to choose available day buttons, or `--hours` with 1–36, 48,
+or 72 to build a single custom duration. `--workers` controls download concurrency,
 capped at four. `--upscale` controls the plotting/aggregation grid subdivision
 (default two). Output and cache paths are relative to the working directory.
 Only parent names are accepted by `--basin`; their subbasins are included.
@@ -42,9 +50,16 @@ and decode successfully before publishing; a partially available cycle fails
 the build. It never selects a cycle more than 18 hours old. HTTP failures,
 missing indexes, and incorrect accumulation metadata produce explicit errors.
 
-Only deterministic **one-hour surface APCP** messages are selected. Probability
-fields and six-hour accumulations are excluded. The old six-hour boundary
-subtraction is gone. Native Lambert conformal coordinates and alternating row
+Only deterministic **surface APCP** messages are selected; probability fields
+are excluded. Three-day builds preserve one-hour accumulations for the first
+24 hours, followed by explicit, nonoverlapping six-hour accumulations through
+72 hours. Later files also contain isolated one-hour amounts; selecting those
+alone would leave gaps, so longer-range intervals are checked explicitly.
+Day totals are nested prefixes of that same interval sequence and never double
+count rainfall. The charts show each bar's actual interval duration and draw
+it over that interval; six-hour totals are not labeled as hourly rates. Single
+custom builds of up to 36 hours retain entirely hourly resolution.
+The old six-hour boundary subtraction is gone. Native Lambert conformal coordinates and alternating row
 scanning are decoded explicitly, then precipitation is linearly interpolated
 onto a regional 0.025-degree latitude/longitude grid. Existing bilinear basin
 sampling and cosine-latitude area weighting are reused. This is an interpolated
@@ -57,8 +72,11 @@ messages for reuse, pruning matching cached messages older than two days before
 the selected cycle. Static maps use Matplotlib directly; interactive charts use
 Plotly. Kaleido, netCDF4, pydap, and rtree are no longer direct dependencies.
 
-Each basin gets PNG/SVG maps, interactive HTML charts, and `hourly_precip.csv`
-with UTC interval-ending timestamps. `status.json` records the actual model
+Each basin and duration gets PNG/SVG maps, interactive HTML charts, and
+`precipitation.csv` with UTC interval-ending timestamps and `interval_hours`.
+The first duration uses the original asset paths; additional durations use
+`48h/` and `72h/` subdirectories. Entirely hourly outputs also include the
+backward-compatible `hourly_precip.csv`. `status.json` records the actual model
 initialization, forecast interval, source, and each gage's availability/latest
 valid observation. The webpage marks forecasts older than 18 hours and
 observations older than three hours as stale, including when updates stop.
@@ -117,5 +135,6 @@ python build_site.py --output .build/site
 
 Regression tests cover deterministic field selection, projected/scanning grid
 orientation, accumulation and cycle validation, millimeter-to-inch conversion,
-full rendering, gage missing values, HTTP range failures, and preservation of
+full rendering, nested 1/2/3-day totals, subbasin chart traces, gage missing
+values, HTTP range failures, and preservation of
 the previous artifact after forecast failure. They require no live data.
