@@ -9,3 +9,4 @@ shapely==2.2.0
 pyproj==3.7.2
 scipy==1.17.1
 eccodes==2.50.1
+pillow==13.0.0

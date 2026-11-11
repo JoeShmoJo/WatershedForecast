@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch, MagicMock
+from shapely.geometry import Polygon
 
 import eccodes as ec
 import numpy as np
@@ -13,6 +14,7 @@ import xarray as xr
 import build_site
 import gageDownload
 import nbm_grib as nbm
+from basin_map import clipped_overlay
 
 CYCLE = datetime(2026, 11, 11, 12, tzinfo=timezone.utc)
 
@@ -106,6 +108,28 @@ class ForecastTests(unittest.TestCase):
 
 
 class SiteTests(unittest.TestCase):
+    def test_map_overlay_clips_boundary_without_changing_forecast_units(self):
+        geometry = Polygon([(0, 0), (1, 0), (0, 1)])
+        axis = np.linspace(-.1, 1.1, 10)
+        field = np.full((10, 10), 1.25)
+        rgba, maximum = clipped_overlay(geometry, axis, axis, field, pixels=50)
+        self.assertAlmostEqual(maximum, 1.25)
+        self.assertTrue((rgba[:, :, 3] == 0).any())
+        self.assertTrue((rgba[:, :, 3] == 205).any())
+        np.testing.assert_array_equal(rgba[rgba[:, :, 3] > 0][:, :3],
+                                      np.tile([255, 174, 66], ((rgba[:, :, 3] > 0).sum(), 1)))
+        dry, maximum = clipped_overlay(geometry, axis, axis, np.zeros((10, 10)), pixels=50)
+        self.assertEqual(maximum, 0)
+        self.assertTrue((dry[:, :, 3] == 0).all())
+        rectangle = Polygon([(0, 0), (1, 0), (1, 1), (0, 1)])
+        gradient = np.broadcast_to(.02+.4*axis[:, None], (10, 10))
+        north_up, _ = clipped_overlay(rectangle, axis, axis, gradient, pixels=50)
+        middle = north_up.shape[1]//2
+        # Increasing precipitation to the north belongs at the image's top.
+        self.assertLess(north_up[0, middle, 2], north_up[-1, middle, 2])
+        with self.assertRaises(ValueError):
+            clipped_overlay(geometry, axis, axis, -field, pixels=50)
+
     def prepare_root(self, root):
         config = {'Test': {'state': 'WA', 'latitude': 45., 'longitude': -122., 'gages': []}}
         (root/'Config.json').write_text(json.dumps(config))
@@ -198,6 +222,19 @@ class SiteTests(unittest.TestCase):
             with patch.object(gageDownload, '_retrying_session', return_value=(client, 20)):
                 frame = gageDownload._fetch_noaa_stageflow_df('TEST')
             self.assertTrue(frame.empty or frame[['stage', 'flow']].isna().all().all())
+
+    def test_carson_configuration_uses_noaa_and_converts_kcfs_to_cfs(self):
+        root = Path(__file__).resolve().parents[1]
+        gauge = json.loads((root/'Config.json').read_text())['Wind_at_Carson']['gages'][0]
+        self.assertEqual((gauge['service'], gauge['site_id'], gauge['type']), ('NOAA', 'WCNW1', 'FLOW'))
+        payload = {'primaryName': 'Stage', 'primaryUnits': 'ft', 'secondaryName': 'Flow', 'secondaryUnits': 'kcfs',
+                   'data': [{'validTime': '2026-11-11T11:15:00Z', 'primary': 3.93, 'secondary': .529}]}
+        client = MagicMock(); client.get.return_value.json.return_value = payload
+        with patch.object(gageDownload, '_retrying_session', return_value=(client, 20)):
+            series, meta = gageDownload.download_gage(gauge, hours=None)
+        self.assertAlmostEqual(series.iloc[0], 529)
+        self.assertEqual(meta['units'], 'cfs')
+        self.assertEqual(meta['service'], 'NOAA')
 
     def test_usgs_missing_sentinel_is_not_a_measurement(self):
         payload = {'value': {'timeSeries': [{

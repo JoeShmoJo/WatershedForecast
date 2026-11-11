@@ -81,6 +81,20 @@ initialization, forecast interval, source, and each gage's availability/latest
 valid observation. The webpage marks forecasts older than 18 hours and
 observations older than three hours as stale, including when updates stop.
 
+The map card uses Leaflet over Esri's public World Topographic Map, with
+permanent subbasin labels/totals, clickable basin summaries, zoom controls,
+fit-to-basin, and a precipitation visibility toggle. Its overlay is rendered
+from the **same accumulated NBM data** as the existing PNG and charts. It does
+not use the separate WPC portal experiment or change the basin mean calculation.
+`basin_map.py` contains this display-only renderer and `map_assets/` contains
+its JavaScript/CSS and vendored Leaflet 1.9.4 with its license. Web Mercator
+display pixels are masked by basin geometry; interpolation adds no model
+resolution. Dry cells are transparent, and missing precipitation fails the build.
+The main day controls switch maps and charts together. PNG/SVG exports remain
+available, including when internet access to the background tiles is unavailable.
+Map tiles require internet and include the provider's attribution; the forecast
+overlay, geometry, controls, and calculations are generated static assets.
+
 ## Gage availability
 
 Observations are fetched independently before forecast retrieval. Missing-data
@@ -88,12 +102,13 @@ sentinels are removed. An unavailable gage is labeled explicitly and does not
 block otherwise valid precipitation forecasts. Observations and their status
 remain in failed-build diagnostics even when forecasting fails.
 
-During live validation on November 11, 2026, Amboy, Hatchery, Underwood, and
-EFL Heisson returned recent observations. Carson returned missing-data values,
-Washougal returned no flow series, and both WA Ecology TXT downloads returned
-HTTP 403 from their upstream application gateway. Those four sources are shown
-as unavailable; this migration does not invent replacement gage IDs or
-circumvent upstream access restrictions. Their availability may change.
+Carson now uses NOAA NWPS gauge **WCNW1**, replacing the discontinued USGS flow
+feed. NOAA's `kcfs` readings are converted to `cfs` for the chart. During live
+validation on November 11, 2026, its latest reading was 529 cfs at 3:15 a.m.
+Pacific, so it was correctly shown as stale rather than unavailable. Amboy,
+Hatchery, Underwood, and EFL Heisson returned recent observations. Washougal
+returned no flow series, and both WA Ecology TXT downloads returned HTTP 403
+from their upstream application gateway. Their availability may change.
 
 ## Deploy to the existing GitHub Pages URL
 

@@ -12,6 +12,7 @@ on:
       - "requirements.*"
       - "Config.json"
       - "Basins/**/basin.geojson"
+      - "map_assets/**"
       - ".github/workflows/build-plots.yml"
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - "requirements.*"
       - "Config.json"
       - "Basins/**/basin.geojson"
+      - "map_assets/**"
       - ".github/workflows/build-plots.yml"
 
 permissions:

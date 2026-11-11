@@ -173,7 +173,13 @@ def _tile_html(basin_key: str, docs_dir: Path, assets_info: dict, status: dict |
     gage_html_rel = _rel_from_docs(assets_info["gage_html"], docs_dir)
 
     hours = (status or {}).get("forecast", {}).get("hours", 24)
-    card_map  = _img_card(f"Cumulative Map ({hours}h forecast)", map_png_rel)
+    interactive_map = (status or {}).get("forecast", {}).get("periods", {}).get(str(hours), {}).get("assets", {}).get(basin_key, {}).get("interactive_map")
+    if interactive_map:
+        card_map = f'''<div class="card"><h3>Cumulative Map ({hours}h forecast)</h3>
+        <div class="iframe-wrap"><iframe data-precip-map src="{escape(interactive_map, quote=True)}" loading="lazy" title="{escape(basin_key.replace('_', ' '), quote=True)} precipitation map"></iframe></div>
+        <div class="linkrow"><a data-map-full href="{escape(interactive_map, quote=True)}" target="_blank" rel="noopener">Open interactive map</a> · <a data-map-png href="{escape(map_png_rel or '', quote=True)}" target="_blank" rel="noopener">PNG</a></div></div>'''
+    else:
+        card_map = _img_card(f"Cumulative Map ({hours}h forecast)", map_png_rel)
     card_ts   = _iframe_card(f"Precipitation + Cumulative ({hours}h forecast)", ts_html_rel)
     card_gage = _iframe_card("Gage Data (last 24h)", gage_html_rel)
     observations = []
@@ -300,7 +306,11 @@ function selectForecast(hours) {
     cards[0].querySelector('h3').textContent = `Cumulative Map (${hours}h forecast)`;
     const image = cards[0].querySelector('img');
     if (image) { image.src = assets.map; image.alt = `Cumulative precipitation over ${hours} hours`; }
-    cards[0].querySelectorAll('a').forEach(link => link.href = assets.map);
+    const mapFrame = cards[0].querySelector('iframe[data-precip-map]');
+    if (mapFrame && mapFrame.getAttribute('src') !== assets.interactive_map) mapFrame.src = assets.interactive_map;
+    cards[0].querySelectorAll('a[data-map-full]').forEach(link => link.href = assets.interactive_map);
+    cards[0].querySelectorAll('a[data-map-png]').forEach(link => link.href = assets.map);
+    if (!mapFrame) cards[0].querySelectorAll('a').forEach(link => link.href = assets.map);
     cards[1].querySelector('h3').textContent = `Precipitation + Cumulative (${hours}h forecast)`;
     const frame = cards[1].querySelector('iframe');
     if (frame && frame.getAttribute('src') !== assets.series) frame.src = assets.series;

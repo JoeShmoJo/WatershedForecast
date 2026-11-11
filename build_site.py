@@ -21,6 +21,7 @@ import WatershedForecast as plots
 from gageDownload import download_gage
 from nbm_grib import load_forecast, forecast_steps
 from write_index import build_index_html
+from basin_map import write_basin_map
 
 
 def fetch_gage(gage):
@@ -66,7 +67,7 @@ def validate_site(site, configs, hours, subdir=""):
     expected = forecast_steps(hours)
     for cfg in configs:
         folder = site / "assets" / cfg.name / subdir
-        for name in ("area_precip_latest.png", "area_precip_latest.svg", "ts_precip_latest.html"):
+        for name in ("area_precip_latest.png", "area_precip_latest.svg", "ts_precip_latest.html", "map.html", "precip_overlay.png"):
             if not (folder/name).is_file() or (folder/name).stat().st_size < 100:
                 raise RuntimeError(f"Missing generated output: {folder/name}")
         frame = pd.read_csv(folder/"precipitation.csv")
@@ -98,6 +99,7 @@ def build(root, output, cache, basin=None, hours=24, workers=4, upscale=2, days=
     work = Path(tempfile.mkdtemp(prefix="watershed-", dir=output.parent))
     site = work/"docs"
     site.mkdir()
+    shutil.copytree(Path(__file__).parent/"map_assets", site/"map_assets")
     status = {"generated_at": datetime.now(timezone.utc).isoformat(), "forecast": {"state": "pending"}, "gages": {}}
     try:
         # Observations are fetched and rendered before forecast retrieval; a
@@ -164,12 +166,18 @@ def build(root, output, cache, basin=None, hours=24, workers=4, upscale=2, days=
                     frame.to_csv(folder/"hourly_precip.csv", index=False)
                 period["assets"][cfg.name] = {
                     "map": (folder/"area_precip_latest.png").relative_to(site).as_posix(),
+                    "interactive_map": (folder/"map.html").relative_to(site).as_posix(),
                     "series": (folder/"ts_precip_latest.html").relative_to(site).as_posix(),
                     "csv": (folder/"precipitation.csv").relative_to(site).as_posix(),
                     "total_inches": float(precip.sum())}
                 logging.info("Rendered %s (%dh): %.3f inches", cfg.name, horizon, precip.sum())
             for cfg in configs:
                 subs = {n.split('/', 1)[1]: values for n, values in series_by_basin.items() if n.startswith(cfg.name+'/')}
+                folder = site/"assets"/cfg.name/subdir
+                outlines = {n.split('/', 1)[1]: geom for n, geom in geometries.items() if n.startswith(cfg.name+'/')}
+                totals = {cfg.name: series_by_basin[cfg.name].sum(), **{name: values.sum() for name, values in subs.items()}}
+                write_basin_map(folder, site, cfg.name, geometries[cfg.name], outlines, totals,
+                                forecast.lat.values, forecast.lon.values, arr.sum(axis=0), period)
                 plots.plotly_ts_precip_multi(series_by_basin[cfg.name], subs,
                                              f"{cfg.name.replace('_', ' ')} — {horizon}h NBM forecast",
                                              str(site/"assets"/cfg.name/subdir/"ts_precip_latest.html"),

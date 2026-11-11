@@ -9,8 +9,8 @@
         "state": "WA",
         "latitude": 45.72657,
         "longitude": -121.79428,
-        "service": "USGS",
-        "site_id": "14128500",
+        "service": "NOAA",
+        "site_id": "WCNW1",
         "type": "FLOW"
       },
       {
