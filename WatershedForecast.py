@@ -1,56 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-WatershedForecast.py — parent & subbasin plotting
+"""Reusable basin configuration, interpolation, and plotting helpers.
 
-What it does (per run item):
-- Writes stamped outputs into that item's own folder:
-    Parent:   docs/assets/<Parent>/
-    Subbasin: docs/assets/<Parent>/<Sub>/
-- Updates LATEST pointers only within that same folder, except:
-    • gage_latest.html is parent-only (in docs/assets/<Parent>/).
-
-Parent outputs (in docs/assets/<Parent>/):
-  - area_precip_<stamp>.png/.svg (+ area_precip_latest.*)
-  - ts_precip_<stamp>.html       (+ ts_precip_latest.html)  [combined parent + subbasins]
-  - gage_<stamp>.html            (+ gage_latest.html)
-  - archive/<Parent>_<stamp>.npz (parent only)
-
-Subbasin outputs (in docs/assets/<Parent>/<Sub>/):
-  - area_precip_<stamp>.png/.svg (+ area_precip_latest.*)
-  - ts_precip_<stamp>.html       (+ ts_precip_latest.html)  [that subbasin only]
-
-Behavior:
-- Parent ts_precip: grouped hourly BARS + cumulative LINES for parent + each subbasin.
-- Subbasin ts_precip: grouped hourly BARS + cumulative LINE for that single subbasin.
-- Bars & lines share colors per series.
-- Parent area map draws subbasin outlines; subbasin maps do not.
-- Pruning: keep current + previous stamp in each folder (does not touch *latest).
-
-Requires:
-- Config.json (parents, optional subbasins, optional gages under parents)
-- gageDownload.py (for gage plots)
+The command-line entry point delegates to build_site.py, which downloads NBM
+GRIB2 data and builds a validated static site in .build/site. See README.md for
+running and deploying the pipeline. Historical output helpers remain available
+for callers, but the builder never changes checked-in docs/ assets.
 """
 
 from __future__ import annotations
+
+import os
+from pathlib import Path
+
+os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parent / ".cache/matplotlib"))
+os.environ.setdefault("XDG_CACHE_HOME", str(Path(__file__).resolve().parent / ".cache"))
 
 # --- non-interactive backend for CI/servers (for Matplotlib maps) ---
 import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-import argparse
 import json
 import logging
 import shutil
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Dict, Tuple, List
 
-import warnings
-from xarray.coding.times import SerializationWarning
 
 import geopandas as gpd
 import numpy as np
@@ -64,9 +42,7 @@ from shapely.prepared import prep as prepare_polygon
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-import os
 import re
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # Plotly (for timeseries)
 try:
@@ -214,100 +190,6 @@ def make_retrying_session(total=5, backoff=1.5, timeout=30):
 
 
 # ----------------------------
-# Data access (NBM)
-# ----------------------------
-def find_latest_nbm_opendap_url() -> str:
-    base = "https://nomads.ncep.noaa.gov/dods/blend"
-    cycles = ["18z", "12z", "06z", "00z"]
-    for day_offset in range(0, 3):
-        date_str = (datetime.now(timezone.utc) - timedelta(days=day_offset)).strftime("%Y%m%d")
-        for cyc in cycles:
-            dds_url = f"{base}/blend{date_str}/blend_1hr_{cyc}.dds"
-            try:
-                r = requests.get(dds_url, timeout=6)
-                if r.status_code == 200 and "Dataset" in r.text[:200]:
-                    return f"{base}/blend{date_str}/blend_1hr_{cyc}"
-            except requests.RequestException:
-                continue
-    raise RuntimeError("No recent NBM 1-hr OPeNDAP dataset found on NOMADS (last 3 days).")
-
-
-def get_locked_nbm_url() -> str:
-    forced = os.environ.get("NBM_URL")
-    if forced:
-        logging.info("NBM_URL env provided; using locked dataset: %s", forced)
-        return forced
-    return find_latest_nbm_opendap_url()
-
-
-def coord_slice(coord_values: np.ndarray, vmin: float, vmax: float) -> slice:
-    return slice(vmin, vmax) if coord_values[0] <= coord_values[-1] else slice(vmax, vmin)
-
-
-def ensure_ascending(lat_vals, lon_vals, grid3d):
-    lat = np.asarray(lat_vals)
-    lon = np.asarray(lon_vals)
-    arr = np.asarray(grid3d)
-    if lat[0] > lat[-1]:
-        lat = lat[::-1]
-        arr = arr[:, ::-1, :]
-    if lon[0] > lon[-1]:
-        lon = lon[::-1]
-        arr = arr[:, :, ::-1]
-    return lat, lon, arr
-
-
-def open_nbm_subset(opendap_url: str, basin: Polygon, hours: int) -> Tuple[xr.DataArray, Tuple[float, float, float, float]]:
-    """
-    Try netCDF4 backend first (fast, if present). Fall back to pydap on CI.
-    You can force a backend via env: NBM_BACKEND=netcdf4|pydap
-    """
-    backend = os.environ.get("NBM_BACKEND", "").strip().lower()
-    last_exc = None
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=SerializationWarning)
-
-        # helper to open with a given engine
-        def _open(engine: str):
-            if engine == "netcdf4":
-                return xr.open_dataset(opendap_url, engine="netcdf4", cache=False)
-            if engine == "pydap":
-                return xr.open_dataset(opendap_url, engine="pydap", backend_kwargs={"timeout": 60})
-            raise ValueError(f"Unsupported backend {engine!r}")
-
-        # Honor explicit env first
-        if backend in {"netcdf4", "pydap"}:
-            try:
-                ds = _open(backend)
-            except Exception as e:
-                raise RuntimeError(f"Failed to open NBM via {backend}: {e}") from e
-        else:
-            # Auto-detect: try netcdf4, then pydap
-            for eng in ("netcdf4", "pydap"):
-                try:
-                    ds = _open(eng)
-                    break
-                except Exception as e:
-                    last_exc = e
-                    ds = None
-            if ds is None:
-                raise RuntimeError(
-                    "Could not open NBM via netcdf4 or pydap. "
-                    "Install netCDF4 or pydap (CI usually uses pydap)."
-                ) from last_exc
-
-    minx, miny, maxx, maxy = basin.bounds
-    pad = 0.05
-    # slice, load, close
-    lat_slice = coord_slice(ds["lat"].values, miny - pad, maxy + pad)
-    lon_slice = coord_slice(ds["lon"].values, minx - pad, maxx + pad)
-    qpf = ds["apcpsfc"].sel(lat=lat_slice, lon=lon_slice).isel(time=slice(0, hours)).load()
-    ds.close()
-    return qpf, (minx, miny, maxx, maxy)
-
-
-# ----------------------------
 # Geometry
 # ----------------------------
 def get_watershed_basin(cfg: RunConfig, offline: bool = False, streamstats_timeout: int = 90, streamstats_retries: int = 5) -> Polygon:
@@ -393,17 +275,6 @@ def wpc_qpf_colormap_extended():
     cmap = ListedColormap(colors, name="wpc_qpf_ext")
     norm = BoundaryNorm(levels, cmap.N, extend="max")
     return cmap, norm, levels
-
-
-def boundary_correct_3d(arr_in_inch: np.ndarray, time_vals) -> np.ndarray:
-    arr = np.asarray(arr_in_inch, dtype=float).copy()
-    nt = arr.shape[0]
-    for t in range(nt):
-        hr = int(pd.to_datetime(time_vals[t]).hour)
-        if hr in (0, 6, 12, 18):
-            t0 = max(0, t - 5)
-            arr[t, :, :] = np.maximum(0.0, arr[t, :, :] - np.nansum(arr[t0:t, :, :], axis=0))
-    return arr
 
 
 def build_index_weights_for_bilinear(lat_src, lon_src, lat_f, lon_f) -> Dict[str, np.ndarray]:
@@ -1020,332 +891,10 @@ def prune_old_plots(out_dir: Path, keep: int = 2) -> None:
 # ----------------------------
 # Orchestration per basin
 # ----------------------------
-def run_one(cfg: RunConfig,
-            offline: bool = False,
-            streamstats_timeout: int = 30,
-            streamstats_retries: int = 5):
-    # 1) Basin geom
-    basin = get_watershed_basin(cfg, offline=offline,
-                                streamstats_timeout=streamstats_timeout,
-                                streamstats_retries=streamstats_retries)
-    logging.info("Basin ready: %s", cfg.name)
-
-    # 2) Forecast
-    url = get_locked_nbm_url()
-    logging.info("Using forecast: %s", url)
-    qpf, bbox = open_nbm_subset(url, basin, cfg.hours)
-
-    # 3) mm -> in, boundary fix
-    times_utc = pd.to_datetime(qpf.time.values)
-    coarse_in = (qpf.values / 25.4).astype("float64")
-    coarse_in_corr = boundary_correct_3d(coarse_in, qpf.time.values)
-
-    # 4) Coordinate order
-    lat_src, lon_src, arr3d = ensure_ascending(qpf.lat.values, qpf.lon.values, coarse_in_corr)
-
-    # 5) Fine grid
-    lat_f, lon_f, dlat_f, dlon_f = build_fine_grid(lat_src, lon_src, bbox, cfg.upscale_factor)
-
-    # 6) MASK/WEIGHTS for this basin
-    mask, weights = basin_mask_and_weights(basin, lat_f, lon_f, cfg.area_weighting)
-    hourly_series_this, fine_cum_this = interpolate_and_aggregate(arr3d, lat_src, lon_src, lat_f, lon_f, weights)
-    hourly_series_this.index = times_utc  # UTC
-
-    # 7) Output dirs & names
-    parent_name = cfg.name.split("/")[0]
-    is_parent = ("/" not in cfg.name)
-
-    out_dir_parent = (cfg.root / "docs" / "assets" / parent_name)
-    out_dir_this   = (cfg.root / "docs" / "assets" / Path(cfg.name))   # <Parent> or <Parent>/<Sub>
-    out_dir_parent.mkdir(parents=True, exist_ok=True)
-    out_dir_this.mkdir(parents=True, exist_ok=True)
-
-    stamp = pd.Timestamp.now(tz="America/Los_Angeles").strftime("%Y%m%d_%H%M")
-
-    # Stamped outputs go to THIS run's folder
-    area_base  = str(out_dir_this / f"area_precip_{stamp}")
-    ts_path    = str(out_dir_this / f"ts_precip_{stamp}.html")
-    gage_path  = str(out_dir_this / f"gage_{stamp}.html")  # parent only used
-
-    # 8) Subbasin outlines + subbasin series (for parent combined plot)
-    sub_outlines = {}
-    subs_hourly_map: Dict[str, pd.Series] = {}
-    if is_parent:
-        try:
-            cfg_json_all = load_config_file(cfg.root)
-            sub_outlines = load_subbasin_geoms_for_parent(cfg.name, cfg.root, cfg.basins_dir, cfg_json_all)
-        except Exception as e:
-            logging.warning("Subbasin outline load failed for %s: %s", cfg.name, e)
-            sub_outlines = {}
-
-        # Build subbasin hourly series using SAME fine grid
-        for sub_name, geom in (sub_outlines or {}).items():
-            _, w_sub = basin_mask_and_weights(geom, lat_f, lon_f, cfg.area_weighting)
-            sub_hourly, _ = interpolate_and_aggregate(arr3d, lat_src, lon_src, lat_f, lon_f, w_sub)
-            sub_hourly.index = times_utc  # UTC
-            subs_hourly_map[sub_name] = sub_hourly
-
-    # 9) MAP (Matplotlib) — pass outlines only for parent
-    title_map = f"{cfg.name} — Basin cumulative precipitation (fine grid x{cfg.upscale_factor})"
-    plot_cumulative_map_plotly_then_fallback(
-        basin, lat_f, lon_f, dlat_f, dlon_f, mask, fine_cum_this,
-    title=None,
-        save_basepath=area_base,
-        subbasin_outlines=sub_outlines if is_parent else None
-    )
-
-    # Update area_precip_latest in the run's own folder (parent & subbasin)
-    try:
-        shutil.copyfile(f"{area_base}.png", out_dir_this / "area_precip_latest.png")
-        shutil.copyfile(f"{area_base}.svg", out_dir_this / "area_precip_latest.svg")
-    except Exception as e:
-        logging.warning("Failed updating area_precip_latest: %s", e)
-
-    # 10) Time-series (Plotly)
-    if is_parent:
-        # Parent: combined plot (parent + subbasins)
-        if _PLOTLY_OK:
-            title_ts = f"{cfg.name} — Hourly bars + Cumulative lines (parent + subbasins) — local time"
-            plotly_ts_precip_multi(hourly_series_this, subs_hourly_map,
-                                   title=None, outfile_html=ts_path, base_label="Basin")
-        else:
-            with open(ts_path, "w", encoding="utf-8") as f:
-                f.write("<html><body><h3>Plotly not available on this runner.</h3></body></html>")
-
-        # Parent latest pointer lives in the parent folder
-        try:
-            shutil.copyfile(ts_path, out_dir_parent / "ts_precip_latest.html")
-        except Exception as e:
-            logging.warning("Failed updating parent ts_precip_latest: %s", e)
-
-    else:
-        # Subbasin: individual plot (bars + line for this subbasin only)
-        if _PLOTLY_OK:
-            title_ts = f"{cfg.name} — Hourly bars + Cumulative line — local time"
-            plotly_ts_precip_multi(hourly_series_this, {},
-                                   title=title_ts, outfile_html=ts_path, base_label=cfg.name.split('/',1)[1])
-        else:
-            with open(ts_path, "w", encoding="utf-8") as f:
-                f.write("<html><body><h3>Plotly not available on this runner.</h3></body></html>")
-
-        # Subbasin latest pointer lives in the SUBFOLDER
-        try:
-            shutil.copyfile(ts_path, out_dir_this / "ts_precip_latest.html")
-        except Exception as e:
-            logging.warning("Failed updating subbasin ts_precip_latest: %s", e)
-
-    # 11) Gage plot (Plotly) — parent only
-    if is_parent:
-        gage_series: List[Tuple[str, pd.Series, str]] = []
-        if _GAGE_OK:
-            try:
-                cfg_json_all = load_config_file(cfg.root)
-                pinfo = cfg_json_all.get(parent_name, {})
-                gages = pinfo.get("gages", []) if isinstance(pinfo, dict) else []
-                for g in gages:
-                    try:
-                        ser, meta = download_gage(g, hours=cfg.hours)
-                        label = g.get("name") or f"{g.get('service','')}-{g.get('site_id','')}"
-                        units = meta.get("units", "")
-                        gage_series.append((label, ser, units))
-                    except Exception as e:
-                        logging.warning("Gage fetch failed for %s: %s", g, e)
-            except Exception as e:
-                logging.warning("Could not load gages for %s: %s", cfg.name, e)
-
-        title_g = f"{cfg.name} — Gage time-series (local time)"
-        if gage_series:
-            plotly_ts_gages(gage_series, title=None, outfile_html=gage_path)
-        else:
-            with open(gage_path, "w", encoding="utf-8") as f:
-                f.write("<html><body><h3>No gage data configured or available.</h3></body></html>")
-
-        # Parent gage latest pointer
-        try:
-            shutil.copyfile(gage_path, out_dir_parent / "gage_latest.html")
-        except Exception as e:
-            logging.warning("Failed updating gage_latest: %s", e)
-
-    # 12) Archive parent-basin grids (same stamp) — parent only, saved in parent folder
-    if is_parent:
-        archive_parent_basin_grids(
-            cfg=cfg,
-            out_dir=out_dir_parent,
-            lat_f=lat_f, lon_f=lon_f, dlat_f=dlat_f, dlon_f=dlon_f,
-            times_utc=pd.DatetimeIndex(times_utc),
-            hourly_series_parent=hourly_series_this,
-            fine_cum_parent=fine_cum_this,
-            nbm_url=url,
-            stamp=stamp,
-        )
-
-    # 13) Prune stamped files (keep current + previous) in THIS run's folder
-    prune_old_plots(out_dir_this, keep=2)
-
-    # Optionally also prune in parent folder (helpful if you only run parents sometimes)
-    if is_parent:
-        prune_old_plots(out_dir_parent, keep=2)
-
-
-# ----------------------------
-# Parallel helpers
-# ----------------------------
-def _run_one_from_dict(cfg_dict, offline, s_timeout, s_retries):
-    try:
-        cfg = RunConfig(**cfg_dict)
-        run_one(cfg, offline=offline,
-                streamstats_timeout=s_timeout,
-                streamstats_retries=s_retries)
-        return (cfg.name, None)
-    except Exception as e:
-        return (cfg_dict.get("name", "UNKNOWN"), str(e))
-
-
-def run_all(root: Path, hours: int = 24, upscale: int = 4, area_weighting: bool = True,
-            basins_dir: Path = Path("Basins"),
-            offline: bool = False, streamstats_timeout: int = 30, streamstats_retries: int = 5):
-    cfg_json = load_config_file(root)
-    cfgs = expand_run_configs(cfg_json, hours, upscale, area_weighting, root, basins_dir,
-                              only=None, include_subbasins=True)
-    for cfg in cfgs:
-        try:
-            run_one(cfg, offline=offline, streamstats_timeout=streamstats_timeout, streamstats_retries=streamstats_retries)
-        except Exception as e:
-            logging.exception("Failed for %s: %s", cfg.name, e)
-
-
-def run_all_parallel(root: Path,
-                     hours: int = 24,
-                     upscale: int = 4,
-                     area_weighting: bool = True,
-                     basins_dir: Path = Path("Basins"),
-                     offline: bool = False,
-                     streamstats_timeout: int = 30,
-                     streamstats_retries: int = 5,
-                     workers: int | None = None):
-    cfg_json = load_config_file(root)
-    cfgs = expand_run_configs(cfg_json, hours, upscale, area_weighting, root, basins_dir,
-                              only=None, include_subbasins=True)
-
-    # Prefetch geometries (optional, can reduce contention)
-    for cfg in cfgs:
-        try:
-            _ = get_watershed_basin(cfg, offline=offline,
-                                    streamstats_timeout=streamstats_timeout,
-                                    streamstats_retries=streamstats_retries)
-        except Exception as e:
-            logging.warning("Prefetch basin failed for %s: %s", cfg.name, e)
-
-    if workers is None or workers <= 0:
-        workers = max(1, (os.cpu_count() or 2) - 0)
-
-    logging.info("Starting parallel run for %d items (parents+subbasins) with %d workers…", len(cfgs), workers)
-
-    args_list = [(
-        cfg.__dict__,
-        offline,
-        streamstats_timeout,
-        streamstats_retries,
-    ) for cfg in cfgs]
-
-    any_error = False
-    with ProcessPoolExecutor(max_workers=workers) as ex:
-        futs = [ex.submit(_run_one_from_dict, *args) for args in args_list]
-        for fut in as_completed(futs):
-            name, err = fut.result()
-            if err:
-                any_error = True
-                logging.error("Basin %s failed: %s", name, err)
-            else:
-                logging.info("Basin %s finished OK", name)
-
-    if any_error:
-        logging.warning("One or more basins/subbasins failed. See logs above.")
-
-
-# ----------------------------
-# CLI
-# ----------------------------
 def main():
-    parser = argparse.ArgumentParser(
-        description="NBM basin precipitation → area maps (PNG/SVG) + Plotly timeseries (HTML)."
-    )
-    parser.add_argument("--root", type=str, default=".",
-                        help="Repo root (where Config.json lives). Default: current dir")
-    parser.add_argument("--basin", type=str, default=None,
-                        help="Run a single parent ('Parent') or sub ('Parent/Sub').")
-    parser.add_argument("--all", action="store_true",
-        help="Run all parents + subbasins in Config.json")
-    parser.add_argument("--hours", type=int, default=24,
-                        help="Forecast hours to use (from t=0). Default: 24")
-    parser.add_argument("--upscale", type=int, default=4,
-                        help="Fine-grid upscale factor (1–4). Default: 4")
-    parser.add_argument("--no-area-weighting", action="store_true",
-                        help="Disable cos(lat) area weighting")
-    parser.add_argument("--basins-dir", type=str, default="Basins",
-                        help="Folder where basin caches live. Default: Basins")
-    parser.add_argument("--offline", action="store_true",
-                        help="Do not call StreamStats; require cached Basins/<name>/basin.geojson.")
-    parser.add_argument("--streamstats-timeout", type=int, default=30,
-                        help="Per-request timeout for StreamStats (seconds).")
-    parser.add_argument("--streamstats-retries", type=int, default=5,
-                        help="Number of retries for StreamStats.")
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Parallel workers for --all (processes). 1 = serial.")
-    parser.add_argument("--no-index", action="store_true",
-                        help="Skip writing docs/index.html at the end.")
-    parser.add_argument("--title", type=str, default="Watershed Forecast Viewer",
-                        help="HTML <title> for docs/index.html")
-    args = parser.parse_args()
-
-    root = Path(args.root).resolve()
-    basins_dir = Path(args.basins_dir)
-
-    if args.all:
-        if args.workers and args.workers > 1:
-            run_all_parallel(root=root,
-                             hours=args.hours,
-                             upscale=args.upscale,
-                             area_weighting=(not args.no_area_weighting),
-                             basins_dir=basins_dir,
-                             offline=args.offline,
-                             streamstats_timeout=args.streamstats_timeout,
-                             streamstats_retries=args.streamstats_retries,
-                             workers=args.workers)
-        else:
-            run_all(root=root,
-                    hours=args.hours,
-                    upscale=args.upscale,
-                    area_weighting=(not args.no_area_weighting),
-                    basins_dir=basins_dir,
-                    offline=args.offline,
-                    streamstats_timeout=args.streamstats_timeout,
-                    streamstats_retries=args.streamstats_retries)
-    else:
-        if not args.basin:
-            parser.error("Specify --basin <Parent> or --basin <Parent/Sub>, or use --all")
-
-        cfg_json = load_config_file(root)
-        cfgs = expand_run_configs(
-            cfg_json,
-            hours=args.hours,
-            upscale=args.upscale,
-            area_weighting=(not args.no_area_weighting),
-            root=root,
-            basins_dir=basins_dir,
-            only=args.basin,
-            include_subbasins=True
-        )
-        for cfg in cfgs:
-            run_one(cfg,
-                    offline=args.offline,
-                    streamstats_timeout=args.streamstats_timeout,
-                    streamstats_retries=args.streamstats_retries)
-
-    # Always try to (re)write the index unless explicitly skipped
-    if not args.no_index:
-        _write_index_after_run(root, title=args.title)
-
+    """Compatibility entry point; all builds use the validated GRIB pipeline."""
+    from build_site import main as build_main
+    build_main()
 
 
 if __name__ == "__main__":

@@ -166,6 +166,7 @@ def _download_usgs(site_id: str,
 
     idx = _tz_to_utc_index(pd.DatetimeIndex(times))
     ser = pd.Series(values, index=idx).sort_index()
+    ser = ser.mask(ser == ts[0].get("variable", {}).get("noDataValue", -999999))
 
     ser = _window_last_hours(ser, hours)
 
@@ -374,7 +375,9 @@ def _fetch_noaa_stageflow_df(lid: str, product: str = "observed") -> pd.DataFram
             "stage": pt.get("primary") if p_name.lower().startswith("stage") else pt.get("secondary"),
             "flow":  pt.get("secondary") if s_name.lower().startswith("flow") else pt.get("primary"),
         })
-    df = pd.DataFrame(rows).sort_values("validTime").reset_index(drop=True)
+    df = pd.DataFrame(rows, columns=["validTime", "stage", "flow"]).sort_values("validTime").reset_index(drop=True)
+    # NWPS uses -999 for missing observations; these are not measurements.
+    df[["stage", "flow"]] = df[["stage", "flow"]].apply(pd.to_numeric, errors="coerce").replace(-999, np.nan)
     df["stage_units"] = p_units if p_name.lower().startswith("stage") else s_units
     df["flow_units"]  = s_units if s_name.lower().startswith("flow")  else p_units
     return df

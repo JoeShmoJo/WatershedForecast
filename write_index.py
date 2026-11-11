@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from html import escape
 from pathlib import Path
 import pandas as pd
 
@@ -158,18 +159,28 @@ def _iframe_card(title: str, html_rel: str | None, link_label: str = "Open inter
         <div class="placeholder"><span>No data yet</span></div>
       </div>"""
 
-def _tile_html(basin_key: str, docs_dir: Path, assets_info: dict) -> str:
+def _tile_html(basin_key: str, docs_dir: Path, assets_info: dict, status: dict | None = None) -> str:
     map_png_rel = _rel_from_docs(assets_info["map_png"], docs_dir)
     ts_html_rel  = _rel_from_docs(assets_info["ts_html"], docs_dir)
     gage_html_rel = _rel_from_docs(assets_info["gage_html"], docs_dir)
 
-    card_map  = _img_card("Cumulative Map (next 24h)", map_png_rel)
-    card_ts   = _iframe_card("Hourly + Cumulative (next 24h)", ts_html_rel)
+    hours = (status or {}).get("forecast", {}).get("hours", 24)
+    card_map  = _img_card(f"Cumulative Map ({hours}h forecast)", map_png_rel)
+    card_ts   = _iframe_card(f"Hourly + Cumulative ({hours}h forecast)", ts_html_rel)
     card_gage = _iframe_card("Gage Data (last 24h)", gage_html_rel)
+    observations = []
+    for gage in (status or {}).get("gages", {}).get(basin_key, []):
+        label = escape(f"{gage['name']} ({gage['service']})")
+        if gage.get("latest"):
+            observations.append(f"{label}: <time data-observation-time='{escape(gage['latest'])}'>{escape(gage['latest'])}</time>")
+        else:
+            observations.append(f"{label}: unavailable")
+    observation_html = "<p>Observations — " + "; ".join(observations) + "</p>" if observations else ""
 
     return f"""
   <div class="basin">
-    <h2>{basin_key}</h2>
+    <h2>{escape(basin_key)}</h2>
+    {observation_html}
     <div class="plots">
       {card_map}
       {card_ts}
@@ -182,6 +193,15 @@ def build_index_html(root: Path, title: str) -> str:
     docs_dir = root / "docs"
     assets_root = docs_dir / "assets"
     cfg = json.loads((root / "Config.json").read_text(encoding="utf-8"))
+    status_path = docs_dir / "status.json"
+    status = json.loads(status_path.read_text()) if status_path.exists() else {}
+    forecast = status.get("forecast", {})
+    if forecast.get("state") == "ok":
+        freshness = f"""<p>Forecast initialized: <time id="forecast-cycle" datetime="{escape(forecast['cycle'])}">{escape(forecast['cycle'])}</time>.
+        Forecast period (UTC): {escape(forecast['valid_start'])} through {escape(forecast['valid_end'])}.</p>
+        <p id="freshness-warning" role="status" hidden style="color:#a32900;font-weight:bold">Forecast data is stale. The latest update has not arrived.</p>"""
+    else:
+        freshness = '<p role="status">Forecast freshness has not been verified.</p>'
 
     head = f"""<!doctype html>
 <html lang="en">
@@ -193,6 +213,7 @@ def build_index_html(root: Path, title: str) -> str:
 </head>
 <body>
   <h1>Watershed Forecast Plots</h1>
+  {freshness}
   <p class="topnote">National Blend of Models <a href="https://vlab.noaa.gov/web/mdl/nbm" target="_blank" rel="noopener">NBM Info</a> basin precipitation forecast and USGS streamflow summaries.</p>
   <p class="topnote">Precipitation grids cut to basin. Forecasts updated every ~6 hours.</p>
   <p class="topnote"> TURN YOUR PHONE SIDEWAYS </p>
@@ -202,7 +223,7 @@ def build_index_html(root: Path, title: str) -> str:
     for basin_key in cfg.keys():  # parents only
         basin_assets = assets_root / basin_key
         info = _detect_assets(basin_assets)
-        body.append(_tile_html(basin_key, docs_dir, info))
+        body.append(_tile_html(basin_key, docs_dir, info, status))
 
     ts = pd.Timestamp.now(tz="America/Los_Angeles").strftime("%Y-%m-%d %H:%M %Z")
     foot = f"""
@@ -217,7 +238,21 @@ def build_index_html(root: Path, title: str) -> str:
 </body>
 </html>
 """
-    return head + "\n".join(body) + foot
+    freshness_script = """<script>
+function updateFreshness() {
+  const cycle = document.getElementById('forecast-cycle');
+  if (cycle) document.getElementById('freshness-warning').hidden =
+    Date.now() - Date.parse(cycle.dateTime) <= 18 * 3600000;
+  document.querySelectorAll('[data-observation-time]').forEach(el => {
+    const stale = Date.now() - Date.parse(el.dataset.observationTime) > 3 * 3600000;
+    el.style.color = stale ? '#a32900' : '';
+    el.title = stale ? 'Observation is more than 3 hours old' : 'Recent observation';
+    el.textContent = new Date(el.dataset.observationTime).toLocaleString(undefined, {timeZoneName:'short'}) + (stale ? ' (stale)' : '');
+  });
+}
+updateFreshness(); setInterval(updateFreshness, 60000);
+</script>"""
+    return head + "\n".join(body) + freshness_script + foot
 
 
 def main():
